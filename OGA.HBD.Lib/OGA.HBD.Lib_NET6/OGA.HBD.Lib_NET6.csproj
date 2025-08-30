@@ -1,0 +1,44 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <PackageId>OGA.HBD.Lib</PackageId>
+    <Product>OGA HBD Library</Product>
+    <Description>OGA Host Bootstrap Document Library</Description>
+    <AssemblyName>OGA.HBD.Lib</AssemblyName>
+    <RootNamespace>OGA.HBD</RootNamespace>
+    <Version>1.0.1</Version>
+    <AssemblyVersion>1.0.1.1</AssemblyVersion>
+    <FileVersion>1.0.1.1</FileVersion>
+    <Authors>Lee White</Authors>
+    <Company>Lee White</Company>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <SignAssembly>False</SignAssembly>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+    <Configurations>DebugWin;ReleaseWin;DebugLinux;ReleaseLinux</Configurations>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$(Configuration.EndsWith('Win'))">
+    <DefineConstants>$(DefineConstants);Windows;NET6</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$(Configuration.EndsWith('Linux'))">
+    <DefineConstants>$(DefineConstants);Linux;NET6</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$(Configuration.EndsWith('OSX'))">
+    <DefineConstants>$(DefineConstants);OSX;NET6</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="jose-jwt" Version="5.2.0" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.13.1" />
+    <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.13.1" />
+  </ItemGroup>
+
+  <Import Project="..\OGA.HBD.Lib_SP\OGA.HBD.Lib_SP.projitems" Label="Shared" />
+
+</Project>

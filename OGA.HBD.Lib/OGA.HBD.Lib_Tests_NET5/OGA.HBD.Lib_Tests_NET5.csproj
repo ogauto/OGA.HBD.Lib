@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net5.0</TargetFramework>
+    <!-- NoWarn below suppresses NETSDK1138 project-wide -->
+    <!-- This suppresses the IDE warning that NET5.0 is out of support. -->
+    <NoWarn>$(NoWarn);NETSDK1138</NoWarn>
+
+    <!-- NoWarn below suppresses CS1998 project-wide -->
+    <!-- This suppresses the IDE warning that the async method lack await. -->
+    <!-- We default all test methods to async, so the timing and dependency calls are the consistent. -->
+    <NoWarn>$(NoWarn);CS1998</NoWarn>
+
+    <RootNamespace>OGA.HBD_Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.6.2" />
+    <PackageReference Include="MSTest.TestAdapter" Version="3.0.4" />
+    <PackageReference Include="MSTest.TestFramework" Version="3.0.4" />
+    <PackageReference Include="coverlet.collector" Version="3.1.2" />
+
+    <PackageReference Include="Nanoid" Version="2.1.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="NLog" Version="5.2.8" />
+    <PackageReference Include="OGA.Common.Lib.NetCore" Version="3.8.0" />
+    <PackageReference Include="OGA.DomainBase" Version="2.2.6" />
+    <PackageReference Include="OGA.SharedKernel" Version="3.6.0" />
+    <PackageReference Include="OGA.Testing.Lib" Version="1.12.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OGA.HBD.Lib_NET5\OGA.HBD.Lib_NET5.csproj" />
+  </ItemGroup>
+
+  <Import Project="..\OGA.HBD.Lib_Tests_SP\OGA.HBD.Lib_Tests_SP.projitems" Label="Shared" />
+
+</Project>

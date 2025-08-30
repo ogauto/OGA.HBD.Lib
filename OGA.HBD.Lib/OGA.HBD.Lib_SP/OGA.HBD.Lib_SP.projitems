@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects Condition="'$(MSBuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>43a1c43d-15de-4e44-accb-2b009415877e</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>OGA.HBD.Lib_SP</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\ES256_Issuer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\JsonDocument_Helpers.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\PEMConverter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\SpkiFileThumbprintProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Model\BootstrapDocResult.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Model\ConfirmationInfo.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Model\Enumerations.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Model\HostInfo.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Model\Host_BootstrapDoc.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Model\JWS_Header.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Model\PublicKeyRing.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Service\HBD_ContextVerifier.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Service\HBD_Signer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Service\VerificationSettings.cs" />
+  </ItemGroup>
+</Project>
