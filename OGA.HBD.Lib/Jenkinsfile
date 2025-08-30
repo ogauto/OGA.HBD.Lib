@@ -175,21 +175,21 @@ pipeline
 				sh "dotnet nuget push -s https://buildtools.ogsofttech.com:8079/v3/index.json './Publish/${projectName}.${version3}.nupkg'"
            }
 		}
-        stage('Publish Public Nuget')
-		{
-           steps
-		   {
-				// Retrieve the API key for pushing packages...
-				withCredentials([string(credentialsId: 'nuget.org-apikey-20230217', variable: 'NUGETAPIKEY')])
-				{
-					//set SECRET with the credential content
-					echo "My secret text is '${NUGETAPIKEY}'"
+        // stage('Publish Public Nuget')
+		// {
+        //    steps
+		//    {
+		// 		// Retrieve the API key for pushing packages...
+		// 		withCredentials([string(credentialsId: 'nuget.org-apikey-20230217', variable: 'NUGETAPIKEY')])
+		// 		{
+		// 			//set SECRET with the credential content
+		// 			echo "My secret text is '${NUGETAPIKEY}'"
 
-					sh "dotnet nuget push -s https://api.nuget.org/v3/index.json './Publish/${projectName}.${version3}.nupkg' --api-key ${NUGETAPIKEY}"
-					//sh "dotnet nuget push -s https://api.nuget.org/v3/index.json './Publish/${projectName}.${version3}.snupkg' --api-key ${NUGETAPIKEY}"
-				}
-           }
-		}
+		// 			sh "dotnet nuget push -s https://api.nuget.org/v3/index.json './Publish/${projectName}.${version3}.nupkg' --api-key ${NUGETAPIKEY}"
+		// 			//sh "dotnet nuget push -s https://api.nuget.org/v3/index.json './Publish/${projectName}.${version3}.snupkg' --api-key ${NUGETAPIKEY}"
+		// 		}
+        //    }
+		// }
         stage('Create Nupkg w/snupkg')
 		{
            steps
