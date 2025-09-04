@@ -51,6 +51,8 @@ namespace OGA.HBD.Service
                 return Fail("Given JWS is blank.");
             }
 
+            var trimmed = jwsCompact.Trim();
+
             var handler = new JsonWebTokenHandler();
             JsonWebToken? token = null;
             string? iss = null;
@@ -58,7 +60,7 @@ namespace OGA.HBD.Service
             // Convert the received JWS to a token...
             try
             {
-                token = handler.ReadJsonWebToken(jwsCompact);
+                token = handler.ReadJsonWebToken(trimmed);
                 if(token == null)
                 {
                     return Fail("Failed to recover token from JWS.");
@@ -244,7 +246,7 @@ namespace OGA.HBD.Service
                 };
 
                 // Now, attempt to verify the token...
-                var validation = handler.ValidateToken(jwsCompact, tvp);
+                var validation = handler.ValidateToken(trimmed, tvp);
                 if (!validation.IsValid)
                 {
                     return Fail("Signature validation failed: " + (validation.Exception?.Message ?? "invalid"));

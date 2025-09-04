@@ -40,9 +40,7 @@ namespace OGA.HBD.Helpers
                 if(valEL.ValueKind != JsonValueKind.String)
                     return false;
 
-                var tmp = valEL.GetString();
-                if(string.IsNullOrEmpty(tmp))
-                    return false;
+                var tmp = valEL.GetString() ?? "";
 
                 val = tmp;
                 return true;

@@ -11,6 +11,7 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)ES256Issuer_LifeCycle_Tests.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ES256Issuer_Tests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HBDSampleGeneration_Tests.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HBDVerifier_Tests.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\TestTemplate_Assembly.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\Test_TestBase.cs" />
