@@ -1726,8 +1726,8 @@ namespace OGA.HBD.Lib_Tests
             hbd.iat = ctime.ToUnixTimeSeconds();
             hbd.exp = etime.ToUnixTimeSeconds();
             hbd.hostInfo.availZone = "";
-            hbd.hostInfo.clusterId = "";
-            hbd.hostInfo.clusterName = "";
+            hbd.hostInfo.clusterId = "12FF8549-6628-40F7-A41F-A3B42EDE44A6";
+            hbd.hostInfo.clusterName = "dev-desktops";
             hbd.hostInfo.creationTime = ctime.ToUnixTimeSeconds();
             hbd.hostInfo.environment = "dev";
             hbd.hostInfo.imageName = "msi-Windows10";
