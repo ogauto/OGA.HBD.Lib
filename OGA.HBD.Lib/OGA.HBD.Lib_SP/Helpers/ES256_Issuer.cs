@@ -103,7 +103,7 @@ namespace OGA.HBD.Helpers
         /// </summary>
         /// <param name="pkcs8"></param>
         /// <returns></returns>
-        static public (int res, ECDsa? keyinstance) CreateIssuer_fromPrivatePKCS8(byte[] pkcs8)
+        static public (int res, ECDsa? issuer) CreateIssuer_fromPrivatePKCS8(byte[] pkcs8)
         {
             bool success = false;
 
@@ -143,10 +143,10 @@ namespace OGA.HBD.Helpers
                 return (-1, null);
 
             var rescreate = CreateIssuer_fromPrivatePKCS8(resload.pkcs8);
-            if(rescreate.res != 1 || rescreate.keyinstance == null)
+            if(rescreate.res != 1 || rescreate.issuer == null)
                 return (-1, null);
 
-            return (1, rescreate.keyinstance);
+            return (1, rescreate.issuer);
         }
 
         /// <summary>

@@ -132,12 +132,12 @@ namespace OGA.HBD.Lib_Tests
 
             // Create a new issuer from it...
             var newissuer = ES256_Issuer.CreateIssuer_fromPrivatePKCS8(resload.pkcs8);
-            if(newissuer.res != 1 || newissuer.keyinstance == null)
+            if(newissuer.res != 1 || newissuer.issuer == null)
                 Assert.Fail("Wrong Value");
 
 
             // Extract properties of the new instance...
-            var newprops = ES256_Issuer.Get_IssuerProperties(newissuer.keyinstance);
+            var newprops = ES256_Issuer.Get_IssuerProperties(newissuer.issuer);
 
 
             // Check each property...
@@ -215,7 +215,7 @@ namespace OGA.HBD.Lib_Tests
         //              Create a new key instance from the PEM.
         //              Verify the recovered key is the same as the original.
         [TestMethod]
-        public async Task Test_1_2_2()
+        public async Task Test_1_2_3()
         {
             // Create a test ES256 issuer instance...
             var (issuerKey, kid, jwks, pubPem, privPem) = ES256_Issuer.Create_NewIssuer();
@@ -224,26 +224,22 @@ namespace OGA.HBD.Lib_Tests
             // Get the private pem...
             var ppem = privPem;
 
-            
-            // Create a folder for storing the key...
-            var foldername = Guid.NewGuid().ToString();
-            var folderpath = System.IO.Path.Combine(this._testfolder, foldername);
-            System.IO.Directory.CreateDirectory(folderpath);
+
+            // Simulate storing the private key as pem in a backing store...
+            var bspem = ppem.ToString();
 
 
-            // Save the private pem file to disk...
-            var ppemfilename = Guid.NewGuid().ToString() + ".pem";
-            var pemfilepath = System.IO.Path.Combine(folderpath, ppemfilename);
-            System.IO.File.WriteAllText(pemfilepath, ppem);
+            // Simulate retrieval of the private key from PEM to pkcs8...
+            var retrievedpem = bspem.ToString();
 
 
-            // Verify the file exists...
-            if(!System.IO.File.Exists(pemfilepath))
+            var resload2 = PEMConverter.Load_PrivatePEMString_toPKCS8(retrievedpem);
+            if(resload2.res != 1 || resload2.pkcs8 == null)
                 Assert.Fail("Wrong Value");
 
 
-            // Create a new issuer instance from the disk file data...
-            var resload = ES256_Issuer.LoadIssuer_fromPrivateKeyPEMPkcs8(pemfilepath);
+            // Create a new issuer instance from the pkcs8...
+            var resload = ES256_Issuer.CreateIssuer_fromPrivatePKCS8(resload2.pkcs8);
             if(resload.res != 1 || resload.issuer == null)
                 Assert.Fail("Wrong Value");
 
