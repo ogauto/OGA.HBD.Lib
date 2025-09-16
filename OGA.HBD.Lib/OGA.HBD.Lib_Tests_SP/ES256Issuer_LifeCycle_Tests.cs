@@ -23,6 +23,14 @@ namespace OGA.HBD.Lib_Tests
         //              Convert the PEM back to a new key.
         //              Create a new key instance from the PEM.
         //              Verify the recovered key is the same as the original.
+        //  Test_1_2_3  This test confirms that we can create an issuer instance, save its key data to a backing store, and load it back, to a new issuer.
+        //              Create a test signing key.
+        //              Convert it to a PEM.
+        //              Simulate saving it in a backing store as a string.
+        //              Simulate retrieving it from a backing store as a string.
+        //              Convert the PEM back to a new key.
+        //              Create a new key instance from the PEM.
+        //              Verify the recovered key is the same as the original.
 
      */
 
@@ -146,6 +154,63 @@ namespace OGA.HBD.Lib_Tests
         //  Test_1_2_2  This test confirms that we can create an issuer instance, save its private key to disk, and load it back using the file to issuer method call.
         //              Create a test signing key.
         //              Convert it to a PEM.
+        //              Convert the PEM back to a new key.
+        //              Create a new key instance from the PEM.
+        //              Verify the recovered key is the same as the original.
+        [TestMethod]
+        public async Task Test_1_2_2()
+        {
+            // Create a test ES256 issuer instance...
+            var (issuerKey, kid, jwks, pubPem, privPem) = ES256_Issuer.Create_NewIssuer();
+
+
+            // Get the private pem...
+            var ppem = privPem;
+
+            
+            // Create a folder for storing the key...
+            var foldername = Guid.NewGuid().ToString();
+            var folderpath = System.IO.Path.Combine(this._testfolder, foldername);
+            System.IO.Directory.CreateDirectory(folderpath);
+
+
+            // Save the private pem file to disk...
+            var ppemfilename = Guid.NewGuid().ToString() + ".pem";
+            var pemfilepath = System.IO.Path.Combine(folderpath, ppemfilename);
+            System.IO.File.WriteAllText(pemfilepath, ppem);
+
+
+            // Verify the file exists...
+            if(!System.IO.File.Exists(pemfilepath))
+                Assert.Fail("Wrong Value");
+
+
+            // Create a new issuer instance from the disk file data...
+            var resload = ES256_Issuer.LoadIssuer_fromPrivateKeyPEMPkcs8(pemfilepath);
+            if(resload.res != 1 || resload.issuer == null)
+                Assert.Fail("Wrong Value");
+
+
+            // Extract properties of the new instance...
+            var newprops = ES256_Issuer.Get_IssuerProperties(resload.issuer);
+
+
+            // Check each property...
+            if(kid != newprops.Kid)
+                Assert.Fail("Wrong Value");
+            if(jwks != newprops.Jwks)
+                Assert.Fail("Wrong Value");
+            if(pubPem != newprops.PublicPem)
+                Assert.Fail("Wrong Value");
+            if(privPem != newprops.PrivatePem)
+                Assert.Fail("Wrong Value");
+        }
+
+        //  Test_1_2_3  This test confirms that we can create an issuer instance, save its key data to a backing store, and load it back, to a new issuer.
+        //              Create a test signing key.
+        //              Convert it to a PEM.
+        //              Simulate saving it in a backing store as a string.
+        //              Simulate retrieving it from a backing store as a string.
         //              Convert the PEM back to a new key.
         //              Create a new key instance from the PEM.
         //              Verify the recovered key is the same as the original.
