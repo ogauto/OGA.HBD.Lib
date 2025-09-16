@@ -76,6 +76,23 @@ namespace OGA.HBD.Model
             this.environment = string.Empty;
         }
 
+        /// <summary>
+        /// Copies from another instance.
+        /// </summary>
+        /// <param name="hi"></param>
+        public void CopyFrom(HostInfo hi)
+        {
+            this.region = hi.region;
+            this.availZone = hi.availZone;
+            this.instanceId = hi.instanceId;
+            this.tenant = hi.tenant;
+            this.imageName = hi.imageName;
+            this.creationTime = hi.creationTime;
+            this.clusterId = hi.clusterId;
+            this.clusterName = hi.clusterName;
+            this.environment = hi.environment;
+        }
+
 
         /// <summary>
         /// Public method for recovering a HostInfo instance from a JsonDocument.
