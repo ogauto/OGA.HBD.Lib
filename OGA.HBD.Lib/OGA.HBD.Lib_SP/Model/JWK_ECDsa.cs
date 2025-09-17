@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.Serialization;
 using System.Text;
 
-namespace OGA.HBD.Lib_SP.Model
+namespace OGA.HBD.Model
 {
     /// <summary>
     /// Holds the information for a single Json Web Key of an ECDsa.
