@@ -40,7 +40,7 @@ namespace OGA.HBD.Lib_Tests.Helpers
             return hbd;
         }
 
-        protected void Compare_HostInfoInstances(HostInfo hbd, HostInfo docinstance)
+        protected void Compare_HostInfoInstances(HostInfo_V1 hbd, HostInfo_V1 docinstance)
         {
             // Check each property...
             if (hbd.region != docinstance.region)

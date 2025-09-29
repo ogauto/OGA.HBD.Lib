@@ -187,7 +187,7 @@ namespace OGA.HBD.Lib_Tests
 
             // Recover the hostinfo...
             // We use a helper method on the HostInfo type, to recover data from the JsonDocument-formatted token payload.
-            var resrec = HostInfo.RecoverHostInfo_fromPayload(resver.Payload);
+            var resrec = HostInfo_V1.RecoverHostInfo_fromPayload(resver.Payload);
             if(resrec.res != 1 || resrec.doc == null)
                 Assert.Fail("Wrong Value");
 

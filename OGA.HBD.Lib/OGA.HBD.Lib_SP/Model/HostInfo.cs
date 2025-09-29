@@ -14,6 +14,14 @@ namespace OGA.HBD.Model
     /// </summary>
     public class HostInfo
     {
+        static public int LatestVersion = 1;
+    }
+
+    /// <summary>
+    /// Version 1 of Host Info for an HBD.
+    /// </summary>
+    public class HostInfo_V1 : HostInfo
+    {
         /// <summary>
         /// Name of the assigned region for the host/instance
         /// </summary>
@@ -59,11 +67,17 @@ namespace OGA.HBD.Model
         /// </summary>
         public string environment { get; set; }
 
+        /// <summary>
+        /// BaseURL for the groundcontrol API.
+        /// Calls to this base URL route include how the host identifies its assigned channel.
+        /// </summary>
+        public string gcBaseUrl { get; set; }
+
 
         /// <summary>
         /// Public constructor, that baselines all values.
         /// </summary>
-        public HostInfo()
+        public HostInfo_V1()
         {
             this.region = string.Empty;
             this.availZone = string.Empty;
@@ -74,13 +88,14 @@ namespace OGA.HBD.Model
             this.clusterId = string.Empty;
             this.clusterName = string.Empty;
             this.environment = string.Empty;
+            this.gcBaseUrl = string.Empty;
         }
 
         /// <summary>
         /// Copies from another instance.
         /// </summary>
         /// <param name="hi"></param>
-        public void CopyFrom(HostInfo hi)
+        public void CopyFrom(HostInfo_V1 hi)
         {
             this.region = hi.region;
             this.availZone = hi.availZone;
@@ -91,6 +106,7 @@ namespace OGA.HBD.Model
             this.clusterId = hi.clusterId;
             this.clusterName = hi.clusterName;
             this.environment = hi.environment;
+            this.gcBaseUrl = hi.gcBaseUrl;
         }
 
 
@@ -100,7 +116,7 @@ namespace OGA.HBD.Model
         /// </summary>
         /// <param name="payload"></param>
         /// <returns></returns>
-        static public (int res, HostInfo? doc) RecoverHostInfo_fromPayload(JsonDocument payload)
+        static public (int res, HostInfo_V1? doc) RecoverHostInfo_fromPayload(JsonDocument payload)
         {
             try
             {
@@ -153,8 +169,12 @@ namespace OGA.HBD.Model
                 {
                     return (-1, null);
                 }
+                if(!JsonDocument_Helpers.TryGetString(hostinfo, "gcBaseUrl", out var baseurl))
+                {
+                    return (-1, null);
+                }
 
-                var doc = new HostInfo();
+                var doc = new HostInfo_V1();
                 doc.availZone = availzone;
                 doc.clusterId = clusterid;
                 doc.clusterName = clustername;
@@ -164,6 +184,7 @@ namespace OGA.HBD.Model
                 doc.instanceId = instanceid;
                 doc.region = region;
                 doc.tenant = tenant;
+                doc.gcBaseUrl = baseurl;
 
                 return (1, doc);
             }

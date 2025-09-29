@@ -41,7 +41,7 @@ namespace OGA.HBD.Model
         /// <summary>
         /// Stores the host/instance data of the document.
         /// </summary>
-        public HostInfo hostInfo { get; set; }
+        public HostInfo_V1 hostInfo { get; set; }
 
         /// <summary>
         /// Holds the confirmation info for the document signature.
@@ -62,7 +62,7 @@ namespace OGA.HBD.Model
             this.iat = 0;
             this.exp = 0;
 
-            this.hostInfo = new HostInfo();
+            this.hostInfo = new HostInfo_V1();
             this.cnf = null;
         }
     }
