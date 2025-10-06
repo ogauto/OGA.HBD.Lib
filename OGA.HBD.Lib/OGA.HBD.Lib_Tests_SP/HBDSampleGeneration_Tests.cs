@@ -123,7 +123,6 @@ namespace OGA.HBD.Lib_Tests
             // This produces a list of public keys that we can use to verify signatures from the test issuer.
             var trustedpublickeys = jwkset.Keys.ToDictionary(k => k.Kid, k => (SecurityKey)k, StringComparer.Ordinal);
 
-
             // Create an HBD...
             var hbd = this.Generate_HBD_forDesktop135();
 
