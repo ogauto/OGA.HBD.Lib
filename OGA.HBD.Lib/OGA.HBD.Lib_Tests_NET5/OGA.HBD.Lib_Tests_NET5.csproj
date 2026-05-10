@@ -13,6 +13,7 @@
 
     <RootNamespace>OGA.HBD_Tests</RootNamespace>
     <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
   </PropertyGroup>
 
   <ItemGroup>

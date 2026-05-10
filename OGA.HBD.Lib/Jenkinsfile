@@ -172,7 +172,14 @@ pipeline
 		{
            steps
 		   {
-				sh "dotnet nuget push -s https://buildtools.ogsofttech.com:8079/v3/index.json './Publish/${projectName}.${version3}.nupkg'"
+				// Retrieve the API key for pushing packages...
+				withCredentials([string(credentialsId: 'buildtools.ogsofttech.com-apikey-20260307', variable: 'BAGETAPIKEY')])
+				{
+					// //set SECRET with the credential content
+					// echo "My secret text is '${BAGETAPIKEY}'"
+
+					sh "dotnet nuget push -s https://buildtools.ogsofttech.com:8079/v3/index.json './Publish/${projectName}.${version3}.nupkg' --api-key ${BAGETAPIKEY}"
+				}
            }
 		}
         // stage('Publish Public Nuget')
@@ -201,7 +208,14 @@ pipeline
 		{
            steps
 		   {
-				sh "dotnet nuget push -s https://buildtools.ogsofttech.com:8079/v3/index.json './Publish/${projectName}.${version3}.snupkg'"
+				// Retrieve the API key for pushing packages...
+				withCredentials([string(credentialsId: 'buildtools.ogsofttech.com-apikey-20260307', variable: 'BAGETAPIKEY')])
+				{
+					// //set SECRET with the credential content
+					// echo "My secret text is '${BAGETAPIKEY}'"
+
+					sh "dotnet nuget push -s https://buildtools.ogsofttech.com:8079/v3/index.json './Publish/${projectName}.${version3}.snupkg' --api-key ${BAGETAPIKEY}"
+				}
            }
 		}
 // These next steps set the version tag in GitHub...

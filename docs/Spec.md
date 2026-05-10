@@ -1,0 +1,847 @@
+# OGA.HBD: Host Bootstrap Document — Specification
+
+**Project:** OGA.HBD
+**Short description:** A signed identity document and supporting library used by hosts and a central authority to attest host identity and bootstrap host management.
+**Author:** [Project owner]
+**Status:** Draft
+**Created:** 2026-05-10T09:05:32Z
+**Last Updated:** 2026-05-10T09:05:32Z
+**Related Documents:** None at this revision. Future related documents include the `groundcontrol` central authority spec and the host provisioning script spec, both of which will reference this document as a foundation.
+
+---
+
+## Table of Contents
+
+1. [Project Overview](#1-project-overview)
+2. [Functional Requirements](#2-functional-requirements)
+3. [Non-Functional Requirements](#3-non-functional-requirements)
+4. [Constraints and Technology Decisions](#4-constraints-and-technology-decisions)
+5. [Architectural Overview](#5-architectural-overview)
+6. [Data Model](#6-data-model)
+7. [Solution Structure](#7-solution-structure)
+8. [Key Interfaces and Contracts](#8-key-interfaces-and-contracts)
+9. [Protocols and Flows](#9-protocols-and-flows)
+10. [API Surface](#10-api-surface)
+11. [Infrastructure](#11-infrastructure)
+12. [Key Decisions](#12-key-decisions)
+13. [Open Items](#13-open-items)
+14. [Revision Log](#14-revision-log)
+
+---
+
+## 1. Project Overview
+
+### 1.1 Background
+
+The project owner manages a fleet of hosts and virtual machines spanning multiple cloud providers (AWS, DigitalOcean) and an on-premises VMware vSphere cluster, organized into per-customer or per-purpose clusters. Some clusters belong to specific customers; others are reserved for the owner's own work or shared build tooling. Each cluster runs over an administrative mesh overlay network that connects back, via a VLAN-isolated jump VM in the local vSphere cluster, to the owner's local administrative infrastructure. Cloud cluster VMs do not expose SSH or RDP to the public internet; all administrative access is mediated by the per-cluster jump VM.
+
+The owner's existing fleet management is centered on a single Ansible plus RunDeck VM that reaches into each cluster through this mesh-and-jump arrangement. This works for executing playbooks but provides no unified view of fleet state — service status, deployment history, container versions, certificate expiry, secrets distribution status, backup outcomes — and the central control plane has implicit access to every host in every cluster, which makes its blast radius coextensive with the fleet.
+
+The owner has begun building a host-resident agent, the **Host Control Service (HCS)**, deployed to every host in every cluster. Today it serves secrets and configuration that are pushed to it by an Ansible job. Its planned extensions are observation and reporting, status collection, and eventually serving as the local deployment agent for everything on a host. To do any of this safely, the HCS needs to authenticate to a central authority (the **groundcontrol** service, planned but not yet built), and the central authority needs to know which host it is talking to. The Host Bootstrap Document (HBD) is the identity primitive that makes that authentication possible.
+
+The HBD is conceptually similar to AWS's Instance Identity Document (IID), but cloud-agnostic, self-issued by an authority the owner controls, and bound by proof-of-possession to a key the host owns. A C# library (the subject of this spec) implements HBD creation, signing, and verification.
+
+### 1.2 Purpose
+
+The HBD library exists to provide a verifiable, portable, cloud-agnostic identity document for hosts in a managed fleet. The document carries enough metadata for a central authority to recognize a host's tenancy, environment, region, and cluster membership; carries proof-of-possession binding to a host-owned key; and is signed by an authority the fleet trusts. The library provides the primitives any component (issuer, host agent, central controller, diagnostic tool) needs to produce, validate, and read these documents without reimplementing JWS handling.
+
+### 1.3 Scope
+
+This spec covers the HBD document format, the C# library that implements it, and the contracts the document and library expose to callers. It covers the rules a verifier MUST follow, the modes in which verification can be performed, and the format and semantics of the proof-of-possession binding.
+
+This spec does NOT cover the central authority that mints HBDs (groundcontrol), the host-resident agent that uses them (HCS), the provisioning script that bootstraps a host into the fleet, or the protocol by which an HBD is transported from issuer to host. Each of those is a downstream concern with its own future spec; each will reference this document as a foundation.
+
+### 1.4 Problem Statement
+
+The problem this project addresses is sufficiently described in §1.1 and §1.2. To restate it precisely: hosts in the owner's fleet currently have no portable, verifiable identity that a central authority can authenticate. They have provider-specific identifiers (AWS instance IDs, DigitalOcean droplet IDs, vSphere VM UUIDs), but no common shape, no signed assertion of cluster or tenant membership, and no proof that a given host owns a given key. The HBD is the document that fills this gap.
+
+### 1.5 Goals
+
+The library shall enable a host or any other consumer to read a Host Bootstrap Document and learn, with cryptographic confidence, what host the document is about and who issued it. The document shall be readable by anyone but trustable only when verified against a known signing key. When proof-of-possession binding is fully implemented, the document shall be usable only by the host that owns the binding key whose thumbprint it carries; a copy of the document on a different host shall fail verification.
+
+The library shall be small, single-purpose, and implementation-language-friendly enough that future ports to other languages (Go or Rust, for hosts where a .NET runtime is undesirable) are tractable. The document format shall be expressible as a standard JWS, so that off-the-shelf JOSE tooling can decode and inspect HBDs even without this library.
+
+The library shall present a clear separation between document semantics (the shape of an HBD, the rules of verification) and host platform concerns (where a binding key lives, how it is generated, how the HBD is stored on a host). Host platform concerns are the responsibility of consumers of the library, not the library itself.
+
+### 1.6 User Requirements
+
+In this spec, "user" refers to a programmatic consumer of the library — typically the groundcontrol service (issuer-side), the HCS or HCS bootstrap (verifier-side), or a diagnostic tool (parser-side). The library does not have human end-users.
+
+**UR-01 — Mint a signed HBD.** An issuer-side caller shall be able to construct a Host Bootstrap Document from supplied claims, sign it with a supplied issuer key, and produce a JWS-encoded representation suitable for transmission or storage.
+
+**UR-02 — Verify a signed HBD.** A verifier-side caller shall be able to take a JWS-encoded HBD, supply a key-retrieval mechanism and verification settings, and learn whether the document's signature is valid and whether its claims are trustworthy.
+
+**UR-03 — Read an HBD's claims.** A caller shall be able to recover the host metadata claims from a verified HBD as strongly-typed values.
+
+**UR-04 — Parse without verification.** A caller shall be able to decode an HBD without verifying its signature, for diagnostic and inspection purposes, and shall receive a result that clearly indicates the signature was not verified.
+
+**UR-05 — Bind an HBD to a host's key.** An issuer-side caller shall be able to embed a binding-key thumbprint in an HBD such that a future verifier can confirm the host presenting the HBD owns the corresponding key.
+
+**UR-06 — Verify binding-key possession.** A verifier-side caller running on a host shall be able to confirm that the host's locally-available binding key matches the thumbprint embedded in the HBD it is verifying.
+
+**UR-07 — Manage issuer keys.** An issuer-side caller shall be able to generate a new issuer signing key, persist it as a PEM file, reload it on subsequent runs, and produce a JWKS suitable for distribution to verifiers.
+
+**UR-08 — Identify issuers unambiguously.** An issuer's identity, as it appears in HBDs, shall be a structured URN that names the organization, the issuer's role, the tenant the issuer serves, the environment, and (optionally) the region, in a form parseable by automated systems.
+
+### 1.7 Non-Goals
+
+- **Storage of HBDs on disk.** Where an HBD lives on a host, what its filename is, what permissions protect it, and how it is rotated on disk are concerns of the consumer (the provisioning script and the HCS bootstrap), not of this library.
+- **Transport of HBDs from issuer to host.** Whether HBDs travel over HTTPS, in a signed envelope, or by some other channel is out of scope. The HBD is self-protecting (signed) so transport requires only integrity-and-confidentiality, not document-format awareness.
+- **Distribution of issuer public keys.** How verifiers obtain trusted issuer public keys is delegated to the caller via a key-retrieval callback. The library expresses no opinion on JWKS endpoints, public-key files, embedded trust roots, or any other distribution mechanism.
+- **Revocation.** This library does not implement revocation lists, revocation endpoints, or revocation status caching. Short HBD lifetimes (controlled by the issuer's choice of `exp`) are the v1 mitigation for compromised HBDs.
+- **The minting protocol.** How a host requests an HBD, how the issuer authenticates the host, how the host proves possession of its binding key at mint time — all out of scope. The HBD format depends on *some* such mechanism existing; the design and specification of that mechanism belongs to the future groundcontrol spec.
+- **Renewal protocol.** The library produces and verifies HBDs but expresses no opinion on the renewal handshake. That belongs to the future groundcontrol spec.
+- **Host platform key management.** Generation, storage, ACLs, and access of binding keys on a Linux or Windows host are out of scope. The library accepts a binding key as an SPKI/PEM file (via the supplied thumbprint provider) or via any other implementation of the thumbprint provider interface; how that file got there is the host platform's concern, specified in the future provisioning script spec.
+
+### 1.8 Glossary
+
+- **HBD** — Host Bootstrap Document. The signed identity document this library produces and verifies. Defined fully in §6.2.
+- **HBK** — Host Binding Key. The keypair an HBD is bound to via the `cnf.jkt` claim. The host owns the private half; the public half's SPKI thumbprint appears in the HBD. Defined fully in §6.6.
+- **groundcontrol** — The planned central authority and controller that issues HBDs and orchestrates host operations. Referenced by name in this spec as an external component but not specified here. The base URL of a host's assigned groundcontrol channel appears in the HBD's `gcBaseUrl` field.
+- **HCS** — Host Control Service. The host-resident agent that uses HBDs to authenticate to groundcontrol. Referenced by name as an external component.
+- **JWS / JWT / JWK / JWKS / JOSE** — Standard IETF terms (RFC 7515, 7519, 7517). Used throughout. See those RFCs for definitions.
+- **SPKI** — SubjectPublicKeyInfo, the DER-encoded structure described by RFC 5280 §4.1.2.7 that wraps a public key with its algorithm identifier. Used in this spec as the canonical binary form from which thumbprints are computed.
+- **SPKI thumbprint** — `base64url(SHA-256(spki_der_bytes))`. The identifier scheme used throughout this design for both issuer key identification (`kid`) and host-binding-key proof-of-possession (`cnf.jkt`). See KD-01 for why this scheme is used in preference to RFC 7638 JWK thumbprints.
+- **Issuer URN** — The structured URN used as the value of an HBD's `iss` claim. Format and grammar defined in §6.7.
+- **PoP** — Proof-of-Possession (RFC 7800). The property that a token's holder demonstrably controls a key associated with the token, defending against simple bearer-token theft.
+
+### 1.9 Spec Conventions
+
+This section is identical across all specs produced under this template. It is included verbatim so that any single spec is self-describing.
+
+**Item identifiers.** Items in this spec are identified by a type prefix and a two-digit zero-padded sequence number:
+
+- **UR-NN** — User Requirement
+- **FR-NN** — Functional Requirement
+- **NFR-NN** — Non-Functional Requirement
+- **KD-NN** — Key Decision
+- **OI-NN** — Open Item
+
+Sequence numbers are assigned in the order items are *created*, not the order they appear in the document. Items may be moved within the document as the spec evolves; their sequence number does not change once assigned.
+
+**Number stability.** Item numbers are stable across all revisions of the spec. A removed item is not deleted from its section — it remains in place with title `### XX-NN — (withdrawn)` and a brief note explaining the removal. New items always take `max(existing_number) + 1` for their type, where the maximum includes all withdrawn entries. Numbers are addresses; addresses are not recycled.
+
+If a project's item count for a given type approaches 99, that is treated as a spec event warranting a major revision and a deliberately widened identifier scheme.
+
+**Cross-references.** Sections are referenced by number (e.g., `§6.5`). Items are referenced by their full identifier (e.g., `FR-14`, `KD-03`).
+
+**Document order is independent of item numbering.** A section may contain `FR-03, FR-15, FR-04, FR-22` in that order because requirements are grouped topically, not by creation order. The identifier is the address; the position is the organization.
+
+**Open Item disposition flags.** Open Items carry one of three dispositions, indicated in the item's title:
+
+- `⚠ NEEDS YOUR INPUT` — requires the project owner to make a decision. The author has no recommendation, or the decision is not theirs to make.
+- `⚠ NEEDS YOUR REVIEW` — the author has a recommendation; the project owner reviews before commit.
+- (no flag) — known gap, intentionally not addressed at this stage of the spec.
+
+**The template is a superset.** This template lists all sections a spec may have. Any individual spec produced from this template is expected to use a subset of these sections. Sections that do not apply to a given project are not deleted — they remain in place with a brief design statement explaining *why* the section was considered and found inapplicable. A bare "not applicable" is insufficient; the explanation is itself a small piece of design reasoning that confirms the consideration happened.
+
+**Tables are for tabular data.** Tables are reserved for information whose presentation genuinely benefits from a tabular rendering — DDL columns, enum values, header/value pairs, dimensional matrices. Requirements, decisions, and open items are prose. Numbered subsections that stand up like a document outline scale better as items grow rationale, get reframed, and accumulate cross-references.
+
+**Requirement language.** Requirements use RFC 2119 vocabulary:
+- **SHALL** / **MUST** — mandatory
+- **SHOULD** — strong recommendation; deviations require justification
+- **MAY** — optional
+
+SHALL is the default and the strong preference for all requirement statements. A well-formed requirement does not hedge — if a behavior is conditional, the condition belongs inside the SHALL: "When X occurs, the system shall Y" rather than "The system should Y." SHOULD and MAY are available if a requirement genuinely cannot be expressed in conditional SHALL form, but the author should attempt the rewrite first.
+
+**Timestamp consistency.** The `Last Updated` field in the title block must match the timestamp of the most recent entry in the Revision Log (§14). Any spec edit that warrants a `Last Updated` change shall also produce a corresponding Revision Log entry. The two values are kept in lockstep.
+
+---
+
+## 2. Functional Requirements
+
+### 2.1 Document Construction
+
+**FR-01 — Construct an HBD instance.** The library shall provide a model type representing an HBD that can be constructed in code, populated with claim values, and submitted to the signing function. Default-constructed instances shall have a coherent shape (docType set, version set, claim fields initialized to empty) such that a caller need only populate the substantive claims.
+
+**FR-02 — Sign an HBD.** The library shall provide a signing function that takes a constructed HBD instance, an issuer private key, and an issuer key identifier, and returns a JWS-encoded compact serialization of the HBD. The signing function shall produce a header containing `alg`, `kid`, and `typ` and shall not modify the HBD's payload claims.
+
+**FR-03 — Caller-managed temporal claims.** The signing function shall not set `iat` or `exp` claims on the HBD. The caller is responsible for populating these claims before submission. The signing function shall fail if `iat` or `exp` are zero or missing in the input.
+
+(Note: the current implementation does not enforce non-zero iat/exp at sign time. See OI-08.)
+
+### 2.2 Verification
+
+**FR-04 — Verify an HBD signature.** The library shall provide a verification function that takes a JWS-encoded HBD and a verification settings object, and returns a verification result indicating whether the signature is valid. The function shall not throw on malformed input; it shall return a result with `Ok = false` and a populated `FailureReason`.
+
+**FR-05 — Verification mode ladder.** Verification shall support four modes of strictness, each a strict superset of the previous: ParseOnly, VerifySignature, VerifySignatureAndCnfWarn, EnforceAll. Mode semantics are defined in §6.5.
+
+**FR-06 — Issuer allowlist.** When the verification settings provide a non-empty list of allowed issuers, verification shall fail if the HBD's `iss` claim is not in the list. When the list is empty, the issuer check is skipped. (See KD-06 for the rationale and the deployment convention this implies.)
+
+**FR-07 — Optional lifetime check.** The verifier shall validate the HBD's `iat` and `exp` claims against current time, with configurable clock skew tolerance, only when the settings opt in. Lifetime *presence* is mandatory in all modes (see FR-09); lifetime *enforcement* is mode-independent and opt-in.
+
+**FR-08 — Key retrieval via callback.** Verification shall obtain the public key for signature verification by invoking a caller-supplied callback, passing the kid extracted from the JWS header. The callback returns the key or an error indication. The library shall not maintain a key store.
+
+**FR-09 — Mandatory claim presence.** The verifier shall require the presence of `docType`, `version`, `iss`, `iat`, and `exp` in every HBD it processes, in all verification modes including ParseOnly. An HBD missing any of these claims shall fail verification.
+
+**FR-10 — Document type check.** The verifier shall confirm the HBD's `docType` claim is exactly `"hbd"` (case-sensitive) and reject documents with any other docType.
+
+**FR-11 — Version compatibility.** The verifier shall accept HBDs declaring `version` exactly 1 and reject all other versions. Forward compatibility with future versions is not silent; future versions require a library update.
+
+**FR-12 — Algorithm pinning.** The verifier shall accept signatures only when `alg` in the JWS header is `ES256`. Any other algorithm value, including `none`, shall cause verification to fail.
+
+**FR-13 — Token type check.** The verifier shall require the JWS header `typ` to be exactly `"JWT"` and reject documents with any other typ value.
+
+### 2.3 Proof-of-Possession Binding
+
+**FR-14 — Bind to host key.** The library shall support populating the HBD's `cnf` claim with a `jkt` value carrying the SPKI thumbprint of a Host Binding Key, in the form defined in §6.4.
+
+**FR-15 — Compute SPKI thumbprint from PEM.** The library shall provide a utility function that takes a path to a PEM-encoded SPKI public key file and returns its base64url(SHA-256(SPKI)) thumbprint, suitable for use as a `cnf.jkt` value.
+
+**FR-16 — Pluggable thumbprint provider.** The library shall define an interface, ILocalKeyThumbprintProvider, that returns the thumbprint of a host's binding key, and the verifier shall use this interface to obtain the local thumbprint for cnf checking. The library shall provide a default implementation that reads an SPKI/PEM file from a configured path.
+
+**FR-17 — Cnf check (warn mode).** When verification mode is VerifySignatureAndCnfWarn, the verifier shall compute the local binding-key thumbprint, compare to the HBD's `cnf.jkt`, and return a result indicating whether the binding matched, but shall not fail verification on mismatch. The result shall expose `CnfChecked` and `CnfMatched` so the caller can observe the binding state.
+
+**FR-18 — Cnf check (enforce mode).** When verification mode is EnforceAll, the verifier shall compute the local binding-key thumbprint, compare to the HBD's `cnf.jkt`, and fail verification on mismatch.
+
+(Note: FR-17 and FR-18 are designed but not yet implemented. See OI-01.)
+
+**FR-19 — Cnf required in non-bare modes.** When verification mode is VerifySignatureAndCnfWarn or EnforceAll, the verifier shall fail if the HBD lacks a populated `cnf.jkt` claim.
+
+### 2.4 Issuer Key Lifecycle
+
+**FR-20 — Generate issuer key.** The library shall provide a function that generates a new ES256 issuer keypair and returns the in-memory key, the kid (computed as the SPKI thumbprint of the public key), the public-key JWKS in JSON, and the public and private keys as PKCS#8 PEM strings.
+
+**FR-21 — Persist and reload issuer key.** The library shall provide functions to save an issuer private key to a PEM file and to reload it from a PEM file, restoring an equivalent in-memory key suitable for signing. The reloaded key shall produce the same kid as the original.
+
+**FR-22 — Export JWKS for distribution.** The library shall provide a function that takes an issuer keypair and produces a JWKS-formatted JSON document containing the public key and its kid, suitable for distribution to verifiers.
+
+### 2.5 Reading Claims
+
+**FR-23 — Recover HostInfo from a verified payload.** The library shall provide a function that takes a verified HBD's JsonDocument payload and produces a strongly-typed HostInfo_V1 instance, returning failure if any required field is missing. (See OI-09 for the consequences of this function's strictness regarding `gcBaseUrl`.)
+
+---
+
+## 3. Non-Functional Requirements
+
+### 3.1 Performance
+
+This is a small library performing standard JOSE operations on documents under a few kilobytes. Performance is dominated by ES256 signature verification (~100µs on commodity hardware) and is not a design constraint. No specific performance NFRs apply at v1.
+
+### 3.2 Reliability and Availability
+
+The library is a pure-function library; reliability is the consumer's concern and depends on the consumer's deployment shape. The library itself shall not introduce ambient state, file handles, or background work that could fail outside the scope of an explicit method invocation.
+
+**NFR-01 — Stateless API.** The library's public functions shall not retain state between invocations. Issuer keys, verification settings, and key retrieval callbacks are all caller-managed.
+
+**NFR-02 — No throwing on malformed input.** Public functions shall return error indications via their result types rather than throwing exceptions on malformed or invalid input. This includes malformed JWS, invalid signatures, missing claims, and unparseable PEM. Implementation bugs (out-of-memory, programmer errors) may still throw.
+
+### 3.3 Security
+
+Security is the central concern of this library. Several requirements here have corresponding Key Decisions in §12.
+
+**NFR-03 — Pinned signing algorithm.** The library shall accept and produce only ES256 signatures. The `alg=none` attack and the various confusion attacks involving HMAC-with-public-key are eliminated by construction. (See KD-02.)
+
+**NFR-04 — Constant-time thumbprint comparison.** The library shall compare cnf.jkt thumbprints using a constant-time comparison function, to defend against timing attacks on thumbprint matching.
+
+**NFR-05 — Signed-claims-only.** The verifier shall draw HBD claims only from the verified payload of the JWS. Header claims (other than `alg`, `kid`, `typ`) shall not be treated as authoritative.
+
+**NFR-06 — No silent permissiveness on cnf failure.** When the verifier is in a mode that requires a cnf check, any failure of that check (mismatch, unavailable local thumbprint, malformed cnf claim) shall be surfaced in the result rather than silently accepted. (See OI-02.)
+
+**NFR-07 — Issuer trust is caller-managed.** The library shall not embed or hardcode trusted issuer public keys, JWKS endpoints, or trust roots. Trust establishment is the caller's responsibility.
+
+### 3.4 Observability
+
+The library does not emit logs, metrics, or traces. The result types it returns carry sufficient information (failure reasons, observed kid, observed iss, signature/cnf check states) for the caller to log appropriately.
+
+**NFR-08 — Diagnostic-rich result types.** Verification results shall carry the observed kid, observed issuer, signature verification state, cnf check state, and a failure reason string (where applicable), so the caller can produce useful logs without re-parsing the input.
+
+### 3.5 Accessibility
+
+Not applicable: this is a programmatic library with no human-facing surface.
+
+### 3.6 Regulatory and Compliance
+
+Not applicable: this library is a building block in a personal-use fleet management system. No regulated data passes through it; no regulatory constraints apply at this revision. If the library is later used in a regulated context, this section is revisited.
+
+---
+
+## 4. Constraints and Technology Decisions
+
+### 4.1 Tech Stack
+
+The library is implemented in C# and targets the .NET runtime. It is currently distributed as a NuGet package targeting .NET 5, .NET 6, and .NET 7, with platform support for `linux-any` and `win-any`. Newer .NET targets (8, 9) are anticipated but not required at v1; the library's surface is small enough that retargeting is mechanical. (See KD-08.)
+
+The library is built from a single Shared Project (`OGA.HBD.Lib_SP`) that holds the actual source, with thin per-target wrapper projects (`OGA.HBD.Lib_NET5`, etc.) that compile the shared sources against a specific framework. Tests follow the same pattern.
+
+### 4.2 Library Dependencies
+
+**Microsoft.IdentityModel.JsonWebTokens** — Role: JWS parsing, signature validation, token introspection. Rationale: the canonical .NET JOSE implementation, maintained by the Azure Active Directory identity team. Switching libraries is conceivable but would require rewriting the verifier; the alternative (jose-jwt for both sign and verify) was considered but rejected because Microsoft.IdentityModel.* offers a richer validation pipeline with TokenValidationParameters that maps cleanly onto the verification mode ladder.
+
+**Microsoft.IdentityModel.Tokens** — Role: token validation parameters, security key abstractions, base64url helpers. Rationale: paired with Microsoft.IdentityModel.JsonWebTokens; same maintainer.
+
+**jose-jwt** — Role: JWS encoding on the signing side (`JWT.Encode` with explicit header support). Rationale: more direct control over header construction than Microsoft.IdentityModel offers for issuance, allowing the library to produce JWS bytes whose pre-image exactly matches what was serialized. Used only in the signer; the verifier does not depend on it.
+
+The library's external API surface does not leak any of these libraries' types, except for `SecurityKey` (from Microsoft.IdentityModel.Tokens), which is used as the return type of the key retrieval callback. A future revision may abstract this away if it constrains language ports.
+
+### 4.3 Environment Constraints
+
+This is a library, not a service. Environment constraints apply to consumers of the library, not to the library itself. The library shall function on any host where the supported .NET runtime is available and where standard cryptographic primitives (ECDSA P-256, SHA-256) are accessible via the platform's CryptoAPI.
+
+The library makes no network calls, opens no listening sockets, and does not rely on any specific filesystem layout. Calls that read PEM files (`SpkiFileThumbprintProvider`, `LoadIssuer_fromPrivateKeyPEMPkcs8`) take their paths from the caller; those paths are conventions of the consumer, not constraints of the library.
+
+### 4.4 Repository Structure
+
+The existing repository structure is preserved. The Shared Project pattern is intentional: it lets per-framework wrapper projects build the same source against different .NET targets without source duplication.
+
+```
+OGA.HBD.Lib/
+  OGA.HBD.Lib_SP/                  shared project: actual library source
+    Model/                         POCO types: HBD, HostInfo, ConfirmationInfo, JWS_Header, BootstrapDocResult, JWK_ECDsa, PublicKeyCache, Enumerations
+    Service/                       HBD_Signer, HBD_ContextVerifier, VerificationSettings
+    Helpers/                       ES256_Issuer, SpkiFileThumbprintProvider, PEMConverter, JsonDocument_Helpers
+    OGA.HBD.Lib_SP.shproj
+    OGA.HBD.Lib_SP.projitems
+  OGA.HBD.Lib_NET5/                wrapper csproj targeting net5.0
+  OGA.HBD.Lib_NET6/                wrapper csproj targeting net6.0
+  OGA.HBD.Lib_NET7/                wrapper csproj targeting net7.0
+  OGA.HBD.Lib_Tests_SP/            shared test source
+    HBDVerifier_Tests.cs
+    ES256Issuer_Tests.cs
+    ES256Issuer_LifeCycle_Tests.cs
+    HBDSampleGeneration_Tests.cs
+    PEMConverter_Tests.cs
+    Helpers/                       Test_TestBase, TestTemplate_Assembly
+  OGA.HBD.Lib_Tests_NET5/          per-target test wrappers
+  OGA.HBD.Lib_Tests_NET6/
+  OGA.HBD.Lib_Tests_NET7/
+  OGA.HBD.Lib.sln
+  OGA.HBD.Lib.nuspec
+  README.md
+  LICENSE
+  docs/
+    SPEC.md                        this document (proposed location)
+```
+
+The `docs/` directory does not currently exist in the repository. Adding it as the home for SPEC.md and any future design documents (architecture diagrams, key decisions outside this spec) is part of adopting this spec as the authoritative reference.
+
+### 4.5 Non-Requirements (Explicit Exclusions)
+
+- **No support for non-ES256 algorithms.** Algorithm agility is a security liability the library will not adopt. (See KD-02.)
+- **No support for HBD versions other than 1.** When v2 is needed, the library will be revised to handle it explicitly. Mixed-version verification is a v2-onward concern. (See KD-09.)
+- **No revocation mechanism.** v1 mitigates compromised HBDs through short lifetimes only. (See KD-10.)
+- **No issuer key distribution.** Verifiers obtain trusted public keys via a caller-supplied callback; the library is silent on how that callback is implemented.
+- **No JWKS endpoint client.** The library produces JWKS JSON (`ExportJwks`) but does not host or fetch one.
+- **No HBD storage on disk.** Where HBDs live is the consumer's concern.
+- **No TPM or HSM integration.** v1 binding keys are software keys (Linux SSH host key, Windows generated key). TPM-backed binding is anticipated as a future migration but is not v1. (See KD-04.)
+
+---
+
+## 5. Architectural Overview
+
+### 5.1 Tiers and Components
+
+The library has no tiers in the conventional sense — it is a single-process, in-process library consumed by other components. Within the library, there are a few clusters of types worth naming:
+
+**Document model.** The POCO types that represent an HBD and its parts: `Host_BootstrapDoc`, `HostInfo_V1`, `ConfirmationInfo`, `JWS_Header`, `JWK_ECDsa`, and the `BootstrapDocResult` returned by verification. These types carry no behavior beyond data initialization and (in the case of `HostInfo_V1`) a static recovery method that reads from a `JsonDocument`.
+
+**Issuer side.** `HBD_Signer` provides the encode-and-sign primitive. `ES256_Issuer` provides issuer-key lifecycle: generate, derive properties (kid, JWKS, public PEM, private PEM), reload from PEM, export JWKS.
+
+**Verifier side.** `HBD_ContextVerifier` provides the verify-and-parse primitive. `VerificationSettings` carries the configuration for a verification call: mode, allowed issuers, key retrieval callback, optional thumbprint provider, lifetime validation flag, clock skew. `ILocalKeyThumbprintProvider` is the interface for cnf binding's local-side computation, with `SpkiFileThumbprintProvider` as the default implementation reading from a PEM file. `PublicKeyCache` is an optional in-memory cache helper for verifiers that want to pool known issuer public keys (not used by the verifier directly; offered to callers).
+
+**Helpers.** `PEMConverter` handles PEM↔DER conversions for keys. `JsonDocument_Helpers` provides safe accessors for reading typed values from a `JsonDocument`.
+
+The library has no startup path of its own; consumers construct settings, call functions, and consume results.
+
+### 5.2 Data Flow
+
+The library participates in two principal flows: HBD issuance and HBD verification. The flows are described in their full architectural context (involving groundcontrol, HCS, the bootstrap script) in §9.2; the in-library data flow is summarized here.
+
+**Issuance.** A caller (typically groundcontrol) constructs a `Host_BootstrapDoc`, populates `iss`, `iat`, `exp`, the `hostInfo` block, and (in production) a `cnf` with the host's binding-key thumbprint. The caller submits the document to `HBD_Signer.CreateBootstrapJws`, supplying the issuer's private key and the kid. The signer serializes the payload as JSON, attaches a header (`alg=ES256`, `kid`, `typ=JWT`), signs the compact-serialization input bytes with ECDSA-SHA-256, and returns the JWS-encoded compact form as a string.
+
+**Verification.** A caller (typically HCS, on a host) receives an HBD as a JWS string and a `VerificationSettings` instance. The verifier parses the JWS, extracts the header, performs document-type and version checks against the payload, validates required claim presence, and (if mode > ParseOnly) retrieves the signing key via the callback, validates the signature using `Microsoft.IdentityModel`'s validation pipeline (configured by translating the `VerificationSettings` into `TokenValidationParameters`), and (if mode includes cnf checking) computes the local binding-key thumbprint via `ILocalKeyThumbprintProvider` and compares to the HBD's `cnf.jkt`. The result returned to the caller carries the verified payload (as a `JsonDocument`), the observed kid and iss, and flags for signature and cnf check states.
+
+---
+
+## 6. Data Model
+
+### 6.1 Entity Overview
+
+The library handles one principal entity (the HBD) plus several supporting types. Everything is structured data; nothing is persisted by the library itself.
+
+**Host Bootstrap Document (HBD).** A signed JWS whose payload contains a small structured set of claims about a host. Issued by an authority, consumed by hosts and other verifiers. Bound to a host-owned key via the `cnf.jkt` claim (when populated).
+
+**Issuer key.** An ES256 keypair owned by an HBD-minting authority. The private half stays with the issuer; the public half is distributed to verifiers (typically as a JWKS).
+
+**Host Binding Key (HBK).** An ES256 keypair owned by a host. The host owns the private half; the public half's SPKI thumbprint appears in the HBD's `cnf.jkt`. Detailed in §6.6.
+
+### 6.2 Schema
+
+An HBD is a JWS in compact serialization, of the form `<header>.<payload>.<signature>`, where each part is base64url-encoded.
+
+**Header.**
+
+| Claim | Type | Required | Value / Notes |
+|------|------|----------|---------------|
+| `alg` | string | Required | `"ES256"` (only accepted value) |
+| `kid` | string | Required | SPKI thumbprint of the issuer's public key |
+| `typ` | string | Required | `"JWT"` (only accepted value) |
+
+**Payload (HBD claims).**
+
+| Claim | Type | Required | Value / Notes |
+|------|------|----------|---------------|
+| `docType` | string | Required | Always `"hbd"` (case-sensitive) |
+| `version` | int | Required | Currently `1` only |
+| `iss` | string | Required | Issuer URN (see §6.7) |
+| `iat` | int (Unix seconds) | Required | Issued-at time |
+| `exp` | int (Unix seconds) | Required | Expiry time |
+| `hostInfo` | object | Required | HostInfo_V1 block (see below) |
+| `cnf` | object \| null | Conditionally required | RFC 7800 confirmation claim (see §6.4) |
+
+**HostInfo_V1.**
+
+| Field | Type | Required | Value / Notes |
+|------|------|----------|---------------|
+| `region` | string | Required, may be empty | Region of the host. Cloud region or a label like `"lee-house"` for on-prem. |
+| `availZone` | string | Required, may be empty | AZ within the region; empty for non-cloud hosts |
+| `instanceId` | string | Required | Stable identifier for this host within the fleet (UUID format suggested but not enforced; format is owner's convention) |
+| `tenant` | string | Required | Canonical slug of the tenant the host belongs to |
+| `imageName` | string | Required | Identifier of the image the host was provisioned from |
+| `creationTime` | int (Unix seconds) | Required | When the host was created (distinct from HBD `iat`) |
+| `clusterId` | string | Required | Identifier of the cluster the host participates in |
+| `clusterName` | string | Required | Human-readable cluster name |
+| `environment` | string | Required | One of: `dev`, `test`, `stage`, `val`, `prod` (case-sensitive, lowercase) |
+| `gcBaseUrl` | string | Required | Base URL of the host's assigned groundcontrol channel |
+
+The `gcBaseUrl` field is required by the recovery function (`HostInfo_V1.RecoverHostInfo_fromPayload`); HBDs lacking it cannot be recovered into a HostInfo_V1 instance. This is consistent with the field's role: the HBD tells the host where its controller is, and an HBD without that information cannot fulfill its role. (See OI-09 for the implication that historic test fixtures predate this field.)
+
+### 6.3 Identifiers
+
+**`instanceId`.** A stable per-host identifier minted at host creation. Format: UUID in canonical 8-4-4-4-12 hyphenated form is the established convention based on existing test fixtures, but the schema does not enforce this. The identifier is opaque to the library; its uniqueness scope and assignment policy are concerns of the issuing authority.
+
+**`clusterId`.** A stable per-cluster identifier in the same shape as `instanceId`. Issued by the controlling authority at cluster creation.
+
+**Issuer kid.** The SPKI thumbprint of the issuer's public key, formed as `base64url(SHA-256(spki_der_bytes))`. This means kids are derived deterministically from keys, not assigned out-of-band. A consequence: two issuers with the same key would have the same kid (degenerate case); two distinct keys cannot share a kid by construction. Key rotation is "publish a new public key with its derived kid; the old kid continues identifying the old key for as long as old HBDs need verifying."
+
+**`cnf.jkt`.** The SPKI thumbprint of the host binding key, in the same form. See KD-01 for why this is SPKI-based rather than RFC 7638-based and what this means for the field name.
+
+### 6.4 The cnf Confirmation Claim
+
+The `cnf` claim follows the shape introduced by RFC 7800 (Proof-of-Possession Key Semantics for JWTs). In this library, the only confirmation method used is `jkt` (key thumbprint).
+
+```json
+"cnf": {
+  "jkt": "ZMD9Cl__fS-2N4tfFrfm-cugKMvhwSXWDR5IzWE2Vok"
+}
+```
+
+The value of `jkt` is the SPKI thumbprint of the binding key's public half: `base64url(SHA-256(spki_der_bytes))`. This is a deliberate departure from RFC 7638's JWK thumbprint (which hashes a canonicalized JWK JSON object) and is documented in KD-01.
+
+When `cnf` is null or absent, the HBD has no proof-of-possession binding. The verifier rejects such HBDs in modes that require a cnf check (see FR-19).
+
+### 6.5 Verification Modes
+
+Verification operates in one of four modes, each strictly more demanding than the last.
+
+**ParseOnly (mode 0).** Decode the JWS, validate header shape (`typ=JWT`), validate document shape (docType, version, required claims present), but do not verify the signature. Returns the payload as a `JsonDocument` and reports `SignatureVerified=false`. Use case: diagnostic inspection of an HBD whose signing key is not available to the verifier.
+
+**VerifySignature (mode 1).** All ParseOnly checks, plus signature verification using the key returned by the caller's key retrieval callback, plus issuer allowlist check (if a non-empty list was supplied). Lifetime check is performed only if `ValidateLifetime=true`. The cnf claim is not consulted. Use case: verifying an HBD whose ownership binding is not relevant or not yet implemented.
+
+**VerifySignatureAndCnfWarn (mode 2).** All VerifySignature checks, plus the cnf check (compute local thumbprint, compare to HBD's cnf.jkt). On mismatch, the result reports `CnfChecked=true, CnfMatched=false` but `Ok=true` — verification succeeds with a warning. On absence of cnf in the HBD, verification fails (cnf is required in this mode). Use case: rolling out cnf binding incrementally, where mismatches should be detected and logged but not break operation.
+
+**EnforceAll (mode 3).** All VerifySignatureAndCnfWarn checks, but cnf mismatch fails verification. Use case: production verification where binding is required for security.
+
+The current implementation supports ParseOnly and VerifySignature. Modes 2 and 3 are designed but stubbed; see OI-01.
+
+### 6.6 The Host Binding Key
+
+The Host Binding Key (HBK) is an ES256 (EC P-256) keypair the host owns and whose public-key SPKI thumbprint is embedded in the HBD's `cnf.jkt` claim. The HBK is the cryptographic anchor that ties an HBD to a specific host.
+
+**Lifecycle (v1, bootstrap-once).** The HBK is generated or designated at host provisioning time and persists for the host's lifetime. The HBK is not rotated in normal operation; key compromise is handled by host re-imaging. (See KD-05.)
+
+**Linux v1.** The HBK is the existing host SSH key (typically `/etc/ssh/ssh_host_ed25519_key` or equivalent), with its public component converted to SPKI/PEM form at provisioning time and stored at a path agreed with the HCS bootstrap. Reusing the existing host SSH key avoids minting a parallel identity for the host.
+
+**Windows v1.** No native equivalent of the Linux host SSH key exists. The HBK is generated by the provisioning script as an EC P-256 keypair and stored in a Windows-native facility. Storage choice (filesystem PEM under `C:\ProgramData\` versus Windows Certificate Store under `LocalMachine\My`) is deferred to the provisioning script spec; see OI-04.
+
+**Future migrations.** vTPM-backed binding keys are an anticipated future migration. The HBD format does not change to support them — `cnf.jkt` remains an SPKI thumbprint of a public key, regardless of where the private half lives. Only host-side key management changes. (See KD-04.)
+
+**Library posture.** The library is platform-agnostic regarding HBK storage. The default `SpkiFileThumbprintProvider` reads a PEM file from a configured path. Other implementations of `ILocalKeyThumbprintProvider` (a Windows Certificate Store provider, a TPM-backed provider) are anticipated and accommodated by the interface.
+
+### 6.7 Issuer URN Naming Convention
+
+The HBD `iss` claim contains a structured URN identifying the issuing authority. The URN format is:
+
+```
+urn:<org>:hbd:<authority>:<tenant>:<env>:<region>
+```
+
+Six fixed colon-separated segments. Region is the only segment that varies in usage between cloud-hosted and non-cloud issuers; for non-cloud issuers, the conventional sentinel value `local` is used to keep the segment count fixed at six.
+
+**Segment semantics.**
+
+- `urn` — literal. Identifies this string as a URN.
+- `<org>` — the organization scope for the issuer. May be the literal `local` for owner-private use; otherwise a canonical organization slug.
+- `hbd` — literal. Namespaces this URN as an HBD-issuer URN, distinguishing it from other URN classes the same organization may use.
+- `<authority>` — the issuer's logical role. Examples: `bootstrap-ca`, `director`, `offline-director`. The closed enumeration of valid authority values is captured in OI-05.
+- `<tenant>` — the canonical slug of the tenant the issuer is assigned to.
+- `<env>` — one of: `dev`, `test`, `stage`, `val`, `prod` (case-sensitive, lowercase).
+- `<region>` — the region the issuer operates in. May be a cloud region (`us-west-1`) or `local` for non-cloud issuers.
+
+**Grammar.** Each segment shall match `[a-z0-9-]+` (lowercase letters, digits, and hyphens, at least one character, no leading or trailing hyphen). Empty segments are not permitted. The URN as a whole shall match:
+
+```
+urn:[a-z0-9-]+:hbd:[a-z0-9-]+:[a-z0-9-]+:(dev|test|stage|val|prod):[a-z0-9-]+
+```
+
+**Example.** `urn:local:hbd:bootstrap-ca:oga:dev:local` — a development bootstrap-CA issuer for the `oga` tenant in the `local` (on-prem) region of the `local` (private) organization.
+
+(See KD-07 for the rationale for this URN shape.)
+
+### 6.8 Versioning and Soft Delete
+
+Not applicable as a data-storage concern: the library does not persist HBDs or maintain a history. Document-format versioning is addressed by the `version` field on the HBD payload; see §6.2 and KD-09.
+
+### 6.9 Data Retention
+
+Not applicable: the library does not retain data. HBDs flow through the library; their persistence (if any) is the consumer's responsibility.
+
+---
+
+## 7. Solution Structure
+
+### 7.1 Libraries and Projects Overview
+
+The library is a single deliverable — a NuGet package containing the OGA.HBD.Lib types. There is no further internal library decomposition at v1.
+
+**OGA.HBD.Lib_SP** — Shared project containing all source. Three top-level namespaces:
+- `OGA.HBD.Model` — POCO types (HBD, HostInfo, ConfirmationInfo, JWS_Header, JWK_ECDsa, BootstrapDocResult, PublicKeyCache, Enumerations).
+- `OGA.HBD.Service` — services and settings (HBD_Signer, HBD_ContextVerifier, VerificationSettings).
+- `OGA.HBD.Helpers` — utilities (ES256_Issuer, SpkiFileThumbprintProvider, ILocalKeyThumbprintProvider, PEMConverter, JsonDocument_Helpers).
+
+**OGA.HBD.Lib_NET5 / NET6 / NET7** — Per-target wrapper csproj files that compile the shared sources against a specific .NET framework. They contain no logic of their own.
+
+**OGA.HBD.Lib_Tests_SP** and per-target test wrappers — MSTest test projects, organized in the same shared-project pattern.
+
+### 7.2 Library Boundary Rationale
+
+The single-library shape is deliberate. The library is small (a few thousand lines including comments), the types are tightly coupled in their semantics (an HBD references a HostInfo_V1, ConfirmationInfo, etc.), and there is no reuse benefit from splitting them. A future split would be motivated only by:
+
+- Wanting to ship the model types as a separate package consumed by callers that need to construct HBDs without taking a dependency on the JOSE machinery (this is hypothetical and would justify a `Model`-only package then).
+- Decomposing the verifier from the signer if some consumers need only one (also hypothetical).
+
+Neither motivation applies at v1. Reconsidering is cheap; relitigating in advance is not.
+
+### 7.3 Reference Rules
+
+The internal namespaces have only the following reference relationships:
+
+- `OGA.HBD.Model` references nothing else in the library (and only base .NET).
+- `OGA.HBD.Helpers` references `OGA.HBD.Model` for the ILocalKeyThumbprintProvider interface and PEM helpers.
+- `OGA.HBD.Service` references both `OGA.HBD.Model` and `OGA.HBD.Helpers`.
+- The test project references all three.
+
+These rules are enforceable by inspection if not by build-time guards. Future contributors should preserve them.
+
+---
+
+## 8. Key Interfaces and Contracts
+
+### 8.1 Internal Interfaces
+
+**ILocalKeyThumbprintProvider.** The interface by which the verifier obtains the local host's binding-key thumbprint for cnf checking.
+
+```csharp
+public interface ILocalKeyThumbprintProvider
+{
+    string GetLocalJktThumbprint();
+}
+```
+
+The interface intentionally returns an already-computed thumbprint string rather than a key. The verifier never sees the key itself; it compares thumbprints. This means a future TPM-backed implementation of the interface can produce the same thumbprint (since the thumbprint is of the public key, not the private one) without exposing the private key to the verifier process.
+
+**Default implementation: SpkiFileThumbprintProvider.** Reads a PEM-encoded SPKI public key from a configured path and returns `base64url(SHA-256(spki))`. Suitable for v1 Linux and v1 Windows file-based binding-key storage. Anticipated future implementations: a `WindowsCertStoreThumbprintProvider` (if OI-04 resolves to cert store), a `TpmThumbprintProvider` (when the vTPM migration occurs).
+
+**Key retrieval callback.**
+
+```csharp
+public delegate (int res, SecurityKey? data) dKeyRetrievalCallback(string kid);
+```
+
+Caller-supplied function the verifier invokes to obtain a public key by kid. Returning `(1, key)` signals success; any other result code signals failure to retrieve. This delegate is the verifier's only window onto the caller's trust roots — the library does not know what keys exist or where they come from. (See OI-06 for the cosmetic note that this delegate type is duplicated in PublicKeyCache as `dKeyRetrieval`.)
+
+### 8.2 External Contracts
+
+The library's external contract is the HBD format itself, described in §6.2 (header), §6.2 (payload), §6.4 (cnf), §6.7 (issuer URN). Any system that produces or consumes HBDs — this library, a future Go or Rust port, a hand-written verifier — is held to that format.
+
+**Versioning of the contract.** The HBD `version` claim is the signal for breaking changes to the document format. v1 is the only version defined at this revision. A v2 will be introduced when a breaking change is unavoidable; the policy for parallel-version operation during v1→v2 transitions is captured as a future concern in KD-09.
+
+**Versioning of the library.** The library follows semantic versioning. A library version that supports HBD v2 will explicitly state that support; a library version that supports only HBD v1 will reject v2 documents (per FR-11).
+
+### 8.3 DTOs and Wire Types
+
+The HBD payload is itself the wire type. The C# types (`Host_BootstrapDoc`, `HostInfo_V1`, `ConfirmationInfo`) are the in-memory representation of the wire type, with property names that match the JSON wire format exactly (no `[JsonPropertyName]` remapping; deliberate, see KD-11).
+
+`JsonSerializerOptions` used by the signer:
+- `PropertyNamingPolicy = null` — preserves exact C# property names (camelCase as written).
+- `WriteIndented = false` — compact output.
+- `DefaultIgnoreCondition = JsonIgnoreCondition.Never` — all properties serialize, including null and default values.
+
+The compact, no-rename, never-ignore stance ensures the bytes the signer signs match the bytes a verifier reads, with no canonical-form drift between implementations.
+
+---
+
+## 9. Protocols and Flows
+
+### 9.1 Protocols
+
+The library implements no bespoke protocols. JWS compact serialization (RFC 7515) and the supporting JOSE specs are the only wire format involved.
+
+The protocols that *use* HBDs — minting, transport, renewal, host bootstrap — are out of scope for this spec; they belong to groundcontrol's spec and the provisioning script's spec. The HBD format depends on those protocols having certain properties (notably, that the minting protocol verifies binding-key possession at issuance time; see OI-03), but does not itself define them.
+
+### 9.2 Architectural Data Flows
+
+Two flows touch the library directly. Their full architectural context is sketched here for the implementer's understanding; implementers of consumer systems will see this material expanded in those systems' own specs.
+
+**HBD issuance.** A host needs an HBD. The host (or its provisioning script) presents itself to the issuing authority (groundcontrol, in some role like `bootstrap-ca`). The minting protocol — out of scope for this spec — establishes that the requesting host owns a particular binding-key public half. Once that is established, the issuer constructs a `Host_BootstrapDoc` populated with the host's metadata (region, cluster, tenant, environment, etc.), the issuer's URN as `iss`, current Unix time as `iat`, an `exp` consistent with the issuer's lifetime policy, the `gcBaseUrl` that points the host at its assigned controller channel, and a `cnf.jkt` containing the SPKI thumbprint of the host's binding-key public half. The issuer calls `HBD_Signer.CreateBootstrapJws` with the document, the issuer's private key, and the kid. The resulting JWS string is returned to the host (via the minting protocol) where the host stores it according to whatever convention the consumer system has established.
+
+**HBD verification on a host.** The HCS or HCS bootstrap, on a host, holds an HBD as a JWS string. It needs to confirm the HBD is authentic and (in production) that this host owns the binding key the HBD references. The host constructs a `VerificationSettings` populated with: the appropriate verification mode (typically `EnforceAll` in production, `VerifySignature` in early-deployment / pre-cnf-implementation phases), the set of allowed issuers (the URNs the host trusts to issue its HBDs), a key retrieval callback that resolves issuer kids to public keys (typically against a JWKS file the host received at provisioning, or a caching wrapper around such a file), and an `ILocalKeyThumbprintProvider` configured to read the host's binding-key public PEM. The host calls `HBD_ContextVerifier.Verify` with the JWS and the settings. The result tells the host whether the HBD is trustworthy and, in non-bare modes, whether the binding to this host was confirmed.
+
+### 9.3 User Workflow Narration
+
+Not applicable: the library has no human users. Workflow narration for the host operator's experience belongs in the provisioning script's spec and the HCS spec.
+
+---
+
+## 10. API Surface
+
+This is a library distributed as a NuGet package; its surface is the public API of its types, documented in §8.1 and the model definitions in §6. The library exposes no HTTP surface.
+
+For reference, the principal public entry points consumers call directly are:
+
+- `HBD_Signer.CreateBootstrapJws(payload, issuerPrivateKey, kid)` — sign an HBD.
+- `HBD_Signer.ComputeJktFromSpkiPem(spkiPemPath)` — utility for issuer-side computation of a `cnf.jkt` value.
+- `HBD_Signer.ExportJwks(issuerPrivateKey, kid)` — produce JWKS for distribution.
+- `HBD_ContextVerifier.Verify(jwsCompact, versettings)` — verify an HBD.
+- `HostInfo_V1.RecoverHostInfo_fromPayload(payload)` — recover strongly-typed claims from a verified payload.
+- `ES256_Issuer.Create_NewIssuer()` — generate a new issuer keypair.
+- `ES256_Issuer.LoadIssuer_fromPrivateKeyPEMPkcs8(pemPath)` — reload an issuer from a stored PEM.
+- `ES256_Issuer.Get_IssuerProperties(ecdsa)` — derive kid, JWKS, public/private PEM from a key.
+- `new SpkiFileThumbprintProvider(spkiPemPath)` — default implementation of `ILocalKeyThumbprintProvider`.
+
+---
+
+## 11. Infrastructure
+
+This is a NuGet-distributed library; deployment shape is the consumer's concern. There is no runtime infrastructure to specify here. Any infrastructure-adjacent constraints (the .NET runtime, supported targets, platform availability) are documented in §4.1 and §4.3.
+
+---
+
+## 12. Key Decisions
+
+### KD-01 — SPKI thumbprint, not RFC 7638 JWK thumbprint, for `kid` and `cnf.jkt`
+
+**Decision.** The thumbprint used for both issuer key identification (`kid`) and host binding-key proof-of-possession (`cnf.jkt`) is `base64url(SHA-256(spki_der_bytes))` — the SHA-256 of the DER-encoded SubjectPublicKeyInfo. This is *not* the JWK thumbprint specified by RFC 7638 (which hashes a canonicalized JWK JSON object).
+
+**Rationale.** The SPKI thumbprint is simpler to compute on the host side: a host has its public key in some form (a PEM file, a TPM-resident key with an exportable public component, a Windows certificate) and can hash the SPKI bytes directly without first constructing a JWK JSON object. The library uses this same scheme uniformly for issuer kids (computed from the issuer's public-key SPKI) and for binding-key thumbprints, keeping a single hashing technique throughout. The implementation is identical between `cnf.jkt` computation and `kid` computation, which simplifies the code and the spec.
+
+**Alternatives considered.** RFC 7638 JWK thumbprints. They are the more standards-conformant choice and would interoperate cleanly with off-the-shelf JOSE tooling that expects `cnf.jkt` to be an RFC 7638 thumbprint. They were rejected because (a) the library is for personal-use and not held to public interoperability, (b) the SPKI approach is materially simpler on the host side, and (c) the host-side keys are not natively JWKs and would require translation through a JWK construction step.
+
+**Consequences.** The field name `jkt` is misleading to a JOSE-knowledgeable reader; it implies RFC 7638. This is a real cost. Two options for resolving the tension are tracked as OI-07: rename the field to something accurate (e.g., `pkt` or `spkit`), or change the implementation to RFC 7638 and keep the conventional name. The library's `ConfirmationInfo` class currently has a misleading comment citing RFC 7638; this is captured for cleanup in OI-10.
+
+A future Go or Rust port of this library must reproduce the SPKI hashing exactly; an implementer following the field name and computing an RFC 7638 thumbprint will produce values that don't match. Spec language around the thumbprint computation must be unambiguous on this point. (Addressed in §6.3, §6.4, §1.8 glossary.)
+
+### KD-02 — ES256-only
+
+**Decision.** The library accepts and produces only ES256 signatures. `alg=none`, HS256, RS256, and other JWS algorithms are not supported in any mode or configuration.
+
+**Rationale.** Algorithm agility is a well-known JOSE liability. Several attack classes (downgrade to `none`, HMAC-with-public-key confusion) depend on the verifier accepting algorithms it shouldn't. By pinning to a single algorithm at both the signer and verifier, these attack classes are eliminated by construction. ES256 is the right choice for v1: it is widely supported in cryptographic libraries on every platform the library targets, the signatures and keys are small, and it pairs naturally with the SPKI thumbprint scheme (which is platform-agnostic for EC keys).
+
+**Alternatives considered.** Algorithm agility (offering EdDSA, RS256 alongside ES256). Rejected because the security cost of agility exceeds the operational benefit for a personal-use library where the owner controls all issuers and verifiers and can move to a new algorithm by versioning the library and the HBD format.
+
+**Consequences.** A move to a different algorithm is a coordinated upgrade across all issuers and verifiers, not a configuration change. This is acceptable given the operational shape of the fleet (single owner, manageable number of components). Required by NFR-03; enforced by FR-12.
+
+### KD-03 — Signer is a pure encode-and-sign primitive
+
+**Decision.** The signer (`HBD_Signer.CreateBootstrapJws`) does not set `iat`, `exp`, `iss`, or any other payload claim. The caller is responsible for populating all claims before submitting the HBD for signing.
+
+**Rationale.** Different callers have different lifetime policies and different ways of constructing claims. A signer that auto-sets `iat = now` and `exp = now + 24h` would constrain all callers to a single TTL policy or require parameter explosion to override defaults. By delegating claim population to the caller (groundcontrol, in production), the signer remains a stable primitive whose behavior is deterministic and easy to reason about.
+
+**Alternatives considered.** A higher-level `IssueHbd(hostInfo, issuerKey, kid, ttl)` that sets `iat`, `exp`, and `iss` automatically. Useful for casual use but constrains operational policy and pushes complexity into the library that belongs in the issuing authority. Rejected.
+
+**Consequences.** The caller must remember to populate `iat` and `exp` correctly. A buggy caller that submits an HBD with `iat=0, exp=0` will produce a signed but operationally-invalid HBD; the verifier will reject it (per FR-09). This is a footgun the spec partially mitigates by stating the contract clearly (FR-03) but does not eliminate. The library could add a sign-time sanity check rejecting `iat=0` or `exp=0`; this is captured as OI-08.
+
+### KD-04 — v1 binding keys are software keys; vTPM is a future migration
+
+**Decision.** The Host Binding Key in v1 is a software key — the existing host SSH key on Linux, a provisioning-generated EC P-256 key on Windows. vTPM-backed binding is planned as a future migration but is not part of v1.
+
+**Rationale.** v1 prioritizes deployability over hardware-rooted attestation. Most of the fleet is virtualized, vTPM availability and configuration vary across hypervisors (vSphere, AWS Nitro, DigitalOcean's hypervisor), and adding a TPM-mediated key handling story to v1 would significantly delay v1 for a personal-use system whose threat model does not currently include attackers with arbitrary host-resident code execution that could exfiltrate software keys. The vTPM migration is real and worth doing eventually; v1 is not the time.
+
+**Alternatives considered.** Skipping software-key binding entirely and going straight to vTPM. Rejected: the host-platform machinery for vTPM-backed keys (Linux tpm2-tss workflows, Windows CNG with the Platform Crypto Provider, AIK enrollment, attestation flows) is substantial work that doesn't pay off for v1's threat model.
+
+**Consequences.** The HBD format is designed so the migration is invisible to verifiers — `cnf.jkt` is an SPKI thumbprint regardless of where the private key lives. Only host-side key management changes. The `ILocalKeyThumbprintProvider` interface accommodates a future `TpmThumbprintProvider` without requiring changes to the verifier or the document format. (See §6.6.)
+
+### KD-05 — Bootstrap-once binding keys
+
+**Decision.** A host's binding key is generated or designated at provisioning and persists for the host's lifetime. It is not rotated in normal operation; key compromise is handled by host re-imaging.
+
+**Rationale.** Bootstrap-once is the simplest workable lifecycle. Rotation adds protocol complexity (renewal handshakes that update the cnf binding, transition windows where multiple binding keys are valid for the same host) for a security benefit that is small in the v1 threat model — a software binding key on a compromised host is exactly as compromised as everything else on that host. The simplicity dividend is real and immediate.
+
+**Alternatives considered.** Periodic rotation (the binding key rolls every N days, with a renewal protocol that updates `cnf.jkt`). Useful for limiting the value of a leaked private key, but more expensive to design and implement than v1 warrants. Rotation can be added later as a v2 feature; the HBD format itself does not constrain the choice. Rejected for v1.
+
+**Consequences.** Re-imaging a host is the standard recovery action for binding-key compromise. The HBK that goes with a host is part of the host's provisioning identity; replacing it requires re-bootstrapping. The spec assumes this is operationally acceptable, which it is for a personal-use fleet.
+
+### KD-06 — `AllowedIssuers` permissive-by-default in the library; non-empty required by deployment convention
+
+**Decision.** When `VerificationSettings.AllowedIssuers` is empty, the verifier skips the issuer check. Production deployments are required by convention to populate the list with at least one issuer URN.
+
+**Rationale.** A non-empty default would require the library to know what issuers the caller trusts, which it cannot. A permissive default (skip the check) is the only neutral library behavior. The deployment-time requirement to populate the list is captured in this spec and is the responsibility of every consumer.
+
+**Alternatives considered.** A required-non-empty contract enforced at construction time (the library throws or returns an error if `Verify` is called with an empty list). Closer to fail-safe but conflates "explicitly skip the check" (legitimate use case for tooling that just wants to validate signature) with "forgot to populate the list" (the dangerous case). Rejected as overly prescriptive.
+
+A separate `RequireIssuerCheck` boolean (default true) that gates the empty-allowed behavior. Stronger than convention; implementable. Captured as a possible v2 enhancement but not adopted at v1.
+
+**Consequences.** Reviewers of consumer code (HCS, groundcontrol, diagnostic tools) need to confirm that production code paths populate `AllowedIssuers`. The spec makes this convention explicit (NFR-07, this KD); future reviewers can reference it.
+
+### KD-07 — Six-segment fixed URN for issuer identity
+
+**Decision.** Issuer URNs are six segments: `urn:<org>:hbd:<authority>:<tenant>:<env>:<region>`. Region is always present, with the literal `local` as the sentinel for non-cloud issuers. The grammar is closed (case-sensitive lowercase, dash-separated segments, regex-defined).
+
+**Rationale.** A fixed segment count simplifies parsing — every URN has exactly the same shape; a parser can split on `:` and assign segments to fields with no conditional logic. The literal `hbd` segment in position 3 reserves namespace for future related URN classes (e.g., HCS-token URNs at `urn:<org>:hcs-token:...`). The closed grammar (regex, lowercase, no special characters) prevents the wandering-format problems that come with permissive URN definitions.
+
+**Alternatives considered.** Variable-length URNs where region is optional, omitted entirely for non-cloud issuers. Simpler in absolute character count but adds parser complexity and ambiguity. Rejected.
+
+A more elaborate URN with sub-namespaces (`urn:org:hbd:authority/tenant/env/region`). More expressive but harder to parse and unfamiliar. Rejected.
+
+**Consequences.** The closed `env` enum (`dev | test | stage | val | prod`) is part of the URN grammar; adding a new environment requires a spec revision. The closed `authority` enum is captured as OI-05 for the same reason. Tooling that produces or parses URNs can rely on the fixed format.
+
+### KD-08 — Multi-target build (NET 5/6/7)
+
+**Decision.** The library is built and shipped as a NuGet package targeting .NET 5, 6, and 7, with `linux-any` and `win-any` runtimes. Newer .NET versions are added when consumer needs them.
+
+**Rationale.** The library has a small surface and uses only stable .NET cryptographic APIs that are available on every supported target. Multi-targeting via shared projects is essentially free in source maintenance and gives consumers flexibility.
+
+**Alternatives considered.** Targeting only the latest LTS. Cleaner build configuration but pushes consumers to upgrade .NET in lockstep with the library. Rejected.
+
+Targeting only `netstandard2.1`. Simpler still, would reach the broadest audience, but loses access to some newer cryptographic conveniences (e.g., `SHA256.HashData` static method). Marginal call; not adopted.
+
+**Consequences.** The build pipeline maintains per-target wrapper csproj files. Adding NET 8/9 is a new wrapper csproj and a build configuration change. Captured as a known follow-up with no immediate trigger.
+
+### KD-09 — HBD version 1 is rigidly enforced; v2 is a coordinated upgrade
+
+**Decision.** The verifier accepts only HBDs declaring `version=1`. Version 2 (when needed) is introduced via a library version that explicitly handles it; verifiers running an older library will reject v2 documents rather than silently downgrading.
+
+**Rationale.** Silent version downgrade is a footgun. Forcing a version mismatch to fail loudly catches deployment errors immediately. v1→v2 transitions are coordinated upgrades: groundcontrol begins minting v2 only when all relevant verifiers have been updated to a library version that supports it.
+
+**Alternatives considered.** Version-tolerant parsing that accepts any version it understands and ignores fields it doesn't. Standard advice for many forward-evolving formats but inappropriate here: HBDs are security-critical, and silently ignoring an unrecognized field could mean ignoring a security control introduced in a later version. Rejected.
+
+**Consequences.** v1→v2 migrations require a planned rollout. The strategy is captured in OI for when it becomes relevant: see future spec revisions.
+
+### KD-10 — No revocation in v1; short HBD lifetimes as the mitigation
+
+**Decision.** v1 has no HBD revocation mechanism. HBDs become invalid by expiry; compromised HBDs stay valid until their `exp` timestamp. The TTL is set short enough (e.g., 24 hours, as in the existing test fixture) that the worst-case exposure window is bounded.
+
+**Rationale.** Revocation lists, OCSP-like endpoints, and revocation status caching are substantial infrastructure for a personal-use system whose worst-case compromise window is a day. The simpler mitigation — make HBDs short-lived and renew them frequently — covers the threat at acceptable operational cost.
+
+**Alternatives considered.** A revocation endpoint queried by verifiers on each verification. Adds network dependency to verification, which is otherwise pure-local. Rejected at v1.
+
+A bloom-filter or denylist of revoked HBDs distributed to verifiers. Tractable but adds distribution complexity. Rejected at v1.
+
+**Consequences.** HBD TTLs are an operational decision made by the issuer (groundcontrol, in production); short TTLs require the renewal protocol to be reliable. If renewal is broken for longer than the TTL, hosts cannot operate. This is a real coupling between renewal availability and operational continuity, captured here for visibility. The renewal protocol's spec — when written — must address this.
+
+### KD-11 — JSON serialization preserves C# property names exactly
+
+**Decision.** The signer serializes HBDs with `PropertyNamingPolicy = null` (no rename) and `DefaultIgnoreCondition = JsonIgnoreCondition.Never` (all properties present including null/default). Wire format property names match C# property names verbatim — `docType` (camelCase as written), `version`, `iss`, `iat`, `exp`, `hostInfo`, `cnf`.
+
+**Rationale.** JSON canonicalization issues are a recurring source of JOSE bugs. Two implementations that produce semantically-equivalent JSON but byte-different strings produce different signatures, which break verification. By writing C# property names in the desired wire format and disabling all JSON-ser-time renaming, the library makes the wire format trivially predictable: it is the literal property names of the C# types. A second implementation in another language can match this format by giving its types the same property names, with no JSON-mapping layer to misconfigure.
+
+**Alternatives considered.** Standard PascalCase C# names with `[JsonPropertyName]` attributes mapping to camelCase. More idiomatic C# but introduces a place for the wire format and the in-memory format to diverge. Rejected.
+
+A canonicalizing serializer (sort keys lexicographically before signing). Stronger guarantee but more code and more places for bugs. Rejected; the simpler "exact-name, no rename" approach is sufficient.
+
+**Consequences.** C# property names look slightly non-idiomatic (`docType` instead of `DocType`). This is acceptable. Future readers should understand the deliberate departure; this KD makes the reasoning visible.
+
+---
+
+## 13. Open Items
+
+### OI-01 — Cnf enforcement modes are stubbed [⚠ NEEDS YOUR REVIEW]
+
+The library's verifier currently fails fast with `"Verification level set to check cnf.jkt, but logic is not yet defined."` whenever it is asked to operate in `VerifySignatureAndCnfWarn` or `EnforceAll` mode. The dead code below the guard sketches the intended logic clearly: read `cnf.jkt`, call the local thumbprint provider, compare, succeed-with-warning on mismatch in Warn mode or fail in Enforce mode. The plumbing is in place; activation is the work.
+
+This is the principal implementation gap in the library. Until it closes, the library cannot enforce that an HBD is being used by the host that owns the binding key — a stolen HBD on a different host verifies fine in the implemented modes. This must close before HCS uses HBDs to authenticate to groundcontrol; until then, HBDs are useful as identity *claims* but not as PoP-bound credentials.
+
+**Recommendation:** Treat this as the first follow-on implementation work after this spec is approved. The fix is small (remove the guard, refine the existing dead code, add tests for both Warn and Enforce paths). A congruency-check OI will be planted when the work is done, to verify the implemented behavior matches §6.5 and FR-17, FR-18.
+
+### OI-02 — Warn-mode silent permissiveness on local-thumbprint exception [⚠ NEEDS YOUR REVIEW]
+
+The dead code intended to implement Warn mode handles a thrown exception from the local thumbprint provider (e.g., the SPKI PEM file is missing or unreadable) by returning `Ok=true` with `FailureReason=null`. This means a host whose binding-key file is broken silently passes verification with no diagnostic.
+
+This is almost certainly not intended. Warn mode's purpose is to surface mismatches without breaking operation; silently-true on a different failure mode (the local thumbprint can't be computed at all) is a different behavior that defeats the diagnostic value.
+
+**Recommendation:** When activating the cnf modes (per OI-01), revise the exception path to populate `FailureReason` with a diagnostic string ("local thumbprint unavailable: {reason}") and decide deliberately whether `Ok` should be true or false in that case. Author's lean: `Ok=true` (Warn means warn, not fail) but with a populated reason so the caller can log it.
+
+### OI-03 — Minting protocol must verify HBK possession at issuance [⚠ NEEDS YOUR INPUT]
+
+The HBD format depends on the minting protocol verifying that the requesting host actually possesses the binding key whose thumbprint goes into `cnf.jkt`. If the minting protocol simply records a thumbprint the host claims, an attacker can claim someone else's thumbprint and obtain an HBD that nominally binds to a key the attacker doesn't control.
+
+The HBD library cannot enforce this property — it is strictly a property of the minting protocol. The minting protocol is out of scope for this spec; this OI documents the dependency so the future groundcontrol spec, when it specifies the minting protocol, addresses it.
+
+**Recommendation:** The minting protocol, as specified in groundcontrol's future spec, shall use challenge-response (the issuer supplies a nonce, the host signs it with the binding key's private half, the issuer verifies the signature) or sign-the-request (the host signs the entire minting request with the binding key) so that possession is proven at issuance. This OI is closed when the minting protocol's spec exists and adopts one of these patterns.
+
+### OI-04 — Windows binding-key storage [⚠ NEEDS YOUR INPUT]
+
+Windows lacks a native equivalent to Linux's host SSH key. The provisioning script must generate a key and store it. Two storage options are under consideration:
+
+- **Filesystem PEM under `C:\ProgramData\OGA\HostKey\`**, with NTFS ACLs limiting read access to `SYSTEM` and `Administrators`. Symmetric with the Linux story; the existing `SpkiFileThumbprintProvider` works as-is.
+- **Windows Certificate Store (`LocalMachine\My`)**, with the private key marked non-exportable. More Windows-native and gets non-exportable private-key semantics for free, but requires a `WindowsCertStoreThumbprintProvider` to be written, doubles the platform-specific surface in the consumer, and adds a Windows-specific dependency to whatever component reads the binding key.
+
+Author's lean: the filesystem PEM option, for symmetry with Linux and to keep the host-side story uniform across platforms. The security upgrade from non-exportable cert-store keys is real but modest in the v1 threat model. This decision properly belongs in the provisioning script's spec; this OI is a placeholder noting that the HBD spec assumes either option is workable and the document format is unaffected by the choice.
+
+### OI-05 — Closed enumeration of valid `authority` values in issuer URNs [⚠ NEEDS YOUR INPUT]
+
+The URN grammar (§6.7) accepts any `[a-z0-9-]+` value for the `authority` segment. The owner has named several roles by example — `bootstrap-ca`, `director`, `offline-director` — but has not closed the enumeration. Allowing free-form authority values is an extension point, but unconstrained extension points produce inconsistency over time.
+
+**Recommendation:** Close the enumeration as part of finalizing the URN grammar. Initial set: `bootstrap-ca`, `director`, `offline-director`. Adding a new authority is a spec revision, not a runtime decision. The verifier MAY validate authority against the closed list at verification time; this is a stronger guarantee than the regex-grammar alone provides.
+
+### OI-06 — Duplicate callback delegate types [code hygiene]
+
+`VerificationSettings.dKeyRetrievalCallback` and `PublicKeyCache.dKeyRetrieval` have identical signatures but are declared separately. They could be consolidated to a single delegate type to reduce caller confusion. This is cosmetic and can be addressed at any time without affecting the wire format or verification behavior.
+
+### OI-07 — `cnf.jkt` field name vs. SPKI hashing [⚠ NEEDS YOUR REVIEW]
+
+The field is named `jkt` (the standard JOSE name for an RFC 7638 JWK thumbprint), but the library uses SPKI-SHA256 hashing per KD-01. This mismatch is a footgun for a future Go/Rust port or any reader who follows the field name to RFC 7638 and computes the wrong value.
+
+Three resolutions:
+- (a) Keep SPKI hashing, rename the field. Suggested names: `spkit`, `pkthumb`, or simply `thumb`. Requires changing the wire format and updating all existing test fixtures and the example in §6.4.
+- (b) Switch the implementation to RFC 7638 thumbprints and keep the `jkt` name. Requires more work (JWK construction step on the host side); makes the library standards-conformant.
+- (c) Keep both name and behavior; document loudly. Author's least-preferred — leaves the footgun in place.
+
+Author's lean: (a). The wire format is private to the owner, the library is for personal use, and honest naming serves the design better than standards-conformance the owner doesn't need.
+
+### OI-08 — Signer should validate non-zero `iat` and `exp` [code hygiene]
+
+KD-03 and FR-03 commit to the signer rejecting HBDs with zero or missing `iat`/`exp`. The current implementation does not enforce this — it will sign whatever is submitted. Adding a sign-time check is a small change that catches a real footgun.
+
+### OI-09 — Stale test fixture: `Generate_ValidHostBootstrapDocument` does not populate `gcBaseUrl` [code hygiene]
+
+The test helper `Generate_ValidHostBootstrapDocument` (in `Test_TestBase.cs`) constructs a HostInfo_V1 without setting `gcBaseUrl`. `RecoverHostInfo_fromPayload` requires the field. This means HBDs generated by the test helper would currently fail recovery — though existing tests appear to verify through paths that don't exercise full recovery. The fixture should be updated to populate `gcBaseUrl` so any new tests built on it produce valid HBDs.
+
+### OI-10 — Stale comment in `ConfirmationInfo.cs` [code hygiene]
+
+The XML doc comment on `ConfirmationInfo.jkt` cites RFC 7638 and includes a leftover `chatgpt.com` URL. Per KD-01, the actual hashing is not RFC 7638. The comment should be updated to (a) describe the actual SPKI-SHA256 hashing, (b) cite RFC 7800 (PoP key semantics, which the cnf claim shape does follow) without misleadingly citing RFC 7638, (c) remove the chatgpt URL. Combined with OI-07, this comment may need a second update if the field is renamed.
+
+### OI-11 — `PublicKeyRing.cs` filename does not match its contained class `PublicKeyCache` [code hygiene]
+
+Cosmetic. Rename the file to `PublicKeyCache.cs` (preferred) or rename the class. No functional impact.
+
+---
+
+## 14. Revision Log
+
+### 2026-05-10T09:05:32Z
+
+Initial draft. Created retrospectively from the existing OGA.HBD.Lib codebase and the design conversation with Claude that produced this document.
+
+Items created:
+- UR-01 through UR-08
+- FR-01 through FR-23
+- NFR-01 through NFR-08
+- KD-01 through KD-11
+- OI-01 through OI-11
+
+Notable items: KD-01 (SPKI thumbprint vs RFC 7638) is the most consequential design choice surfaced by the spec exercise; OI-01 (cnf enforcement modes are stubbed) is the most consequential implementation gap; OI-07 (field naming) is the principal cleanup decision needed before further components depend on the library.
+
+---
+
+*End of specification.*
