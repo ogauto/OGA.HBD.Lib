@@ -39,12 +39,12 @@ namespace OGA.HBD.Model
         /// </summary>
         public bool SignatureVerified { get; init; }
         /// <summary>
-        /// Indicates if the CNF.JKT was checked.
+        /// Indicates if the cnf.pkthumb was checked.
         /// </summary>
         public bool CnfChecked { get; init; }
         /// <summary>
-        /// Indicates if the CNF.JKT matched the host/instance.
-        /// When trues, the host is verified as being the correct owner of the HBD.
+        /// Indicates if the cnf.pkthumb matched the host/instance.
+        /// When true, the host is verified as being the correct owner of the HBD.
         /// </summary>
         public bool CnfMatched { get; init; }
     }

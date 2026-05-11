@@ -1,4 +1,4 @@
-﻿using Jose;
+using Jose;
 using OGA.HBD.Helpers;
 using OGA.HBD.Model;
 using System;
@@ -33,6 +33,9 @@ namespace OGA.HBD.Service
 
         /// <summary>
         /// Create a compact JWS (ES256) for the given Host Bootstrap Document; header includes alg/kid/typ.
+        /// The caller is responsible for populating iat and exp on the payload; the signer rejects
+        /// HBDs whose iat or exp is zero/negative, or whose exp is not strictly greater than iat.
+        /// (See FR-03 and KD-03 in SPEC.md.)
         /// </summary>
         static public (int res, string? val) CreateBootstrapJws(Host_BootstrapDoc payload, ECDsa issuerPrivateKey, string kid)
         {
@@ -50,6 +53,20 @@ namespace OGA.HBD.Service
                 if(string.IsNullOrWhiteSpace(kid))
                 {
                     return (-1, null);
+                }
+
+                // Sanity-check the caller-provided lifetime claims (FR-03 / KD-03)...
+                if(payload.iat <= 0)
+                {
+                    return (-3, null);
+                }
+                if(payload.exp <= 0)
+                {
+                    return (-3, null);
+                }
+                if(payload.exp <= payload.iat)
+                {
+                    return (-3, null);
                 }
 
                 // Compose the jws header...
@@ -77,9 +94,10 @@ namespace OGA.HBD.Service
 
         /// <summary>
         /// Compute base64url(SHA-256(SPKI)) from a PEM "PUBLIC KEY" file (SubjectPublicKeyInfo).
-        /// Use this to fill cnf.jkt if you’re binding to a VM key (dev: software/SSH; prod: vTPM).
+        /// Use this to fill cnf.pkthumb when binding an HBD to a host's binding key
+        /// (dev: software/SSH-derived key; prod: vTPM-backed key).
         /// </summary>
-        static public string ComputeJktFromSpkiPem(string spkiPemPath)
+        static public string ComputePkthumbFromSpkiPem(string spkiPemPath)
         {
             var pem = File.ReadAllText(spkiPemPath);
             var spki = PEMConverter.ExtractKey_fromPem(pem, "PUBLIC KEY");

@@ -13,7 +13,7 @@ namespace OGA.HBD.Service
     /// Populate an instance with the settings and callbacks needed to verify a token.
     /// At a minimum, you will need to define a verification level (mode).
     /// If set to Verification, assign a key retrieval callback, and optional issuers list.
-    /// If verifying cnf.jkt, pass in a thumbprint provider.
+    /// If verifying cnf.pkthumb, pass in a thumbprint provider.
     /// </summary>
     public sealed class VerificationSettings
     {
@@ -28,8 +28,8 @@ namespace OGA.HBD.Service
         public HashSet<string> AllowedIssuers { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
-        /// Optional local thumbprint provider for cnf.jkt binding.
-        /// This is only required if mode checks CNF.jkt.
+        /// Optional local thumbprint provider for cnf.pkthumb binding.
+        /// This is only required if mode checks cnf.pkthumb.
         /// </summary>
         public ILocalKeyThumbprintProvider? LocalThumbprintProvider { get; init; }
 

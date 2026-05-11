@@ -274,41 +274,41 @@ namespace OGA.HBD.Service
             // From here down, the CNF must be interrogated, to warn or enforce.
 
 
-            // Attempt to recover the CNF property from the token...
-            var (hasCnf, jkt) = TryReadCnfJkt(respayload.data);
-            if (!hasCnf || string.IsNullOrWhiteSpace(jkt))
+            // From here down, we are in Warn or Enforce mode and the cnf claim must be evaluated.
+            var isWarn = versettings.Mode == VerificationMode.VerifySignatureAndCnfWarn;
+
+            // The caller must supply a thumbprint provider when running in Warn or Enforce...
+            if(versettings.LocalThumbprintProvider == null)
             {
-                // Failed to get cnf or the jkt is empty.
-                // For warn or enforce modes, we need the cnf.jkt.
-                // So, we must fail, here.
-
-                return Fail("cnf.jkt not found.");
+                return Fail("Verification mode requires a LocalThumbprintProvider, but none was supplied.");
             }
-            // We have the jkt from the cnf property.
-            // We can act to warn, or enforce its value.
 
-
-            // Fail immediately, if checks require cnf warning or enforcement...
-            // We're doing this, to know that we need to revisit the following block of code, to make it functional.
-            if(versettings.Mode == VerificationMode.VerifySignatureAndCnfWarn ||
-                versettings.Mode == VerificationMode.EnforceAll)
+            // Attempt to recover the cnf.pkthumb from the token payload...
+            var (hasCnf, pkthumb) = TryReadCnfPkthumb(respayload.data);
+            if (!hasCnf || string.IsNullOrWhiteSpace(pkthumb))
             {
-                return Fail("Verification level set to check cnf.jkt, but logic is not yet defined.");
+                // The HBD has no populated cnf.pkthumb; per FR-19, fail in both Warn and Enforce.
+                return Fail("cnf.pkthumb not found.");
             }
-            // FROM HERE DOWN, WE HAVE NOT YET REFINED THE LOGIC TO EVALUATE THE CNF.JKT PROPERTY.
-            // FROM HERE DOWN, WE HAVE NOT YET REFINED THE LOGIC TO EVALUATE THE CNF.JKT PROPERTY.
-            // FROM HERE DOWN, WE HAVE NOT YET REFINED THE LOGIC TO EVALUATE THE CNF.JKT PROPERTY.
-            // FROM HERE DOWN, WE HAVE NOT YET REFINED THE LOGIC TO EVALUATE THE CNF.JKT PROPERTY.
+            // We have the pkthumb from the HBD's cnf claim.
 
-            string localJkt;
-            try { localJkt = versettings.LocalThumbprintProvider.GetLocalJktThumbprint(); }
+
+            // Attempt to compute the local binding-key thumbprint...
+            string localPkthumb;
+            try
+            {
+                localPkthumb = versettings.LocalThumbprintProvider.GetLocalPkthumb();
+            }
             catch (Exception ex)
             {
-                var warnOk = versettings.Mode == VerificationMode.VerifySignatureAndCnfWarn;
+                // Provider failed (binding-key material missing, unreadable, malformed)...
+                // Warn mode surfaces the diagnostic but lets verification succeed.
+                // Enforce mode fails.
+                var diag = "local thumbprint unavailable: " + ex.Message;
                 return new BootstrapDocResult
                 {
-                    Ok = warnOk,
-                    FailureReason = warnOk ? null : "Failed to compute local jkt: " + ex.Message,
+                    Ok = isWarn,
+                    FailureReason = diag,
                     Kid = reshdr.data.kid ?? "",
                     Iss = iss,
                     Payload = respayload.data,
@@ -318,19 +318,37 @@ namespace OGA.HBD.Service
                 };
             }
 
-            var matches = TimingSafeEquals(jkt!, localJkt);
-            var finalOk = matches || versettings.Mode != VerificationMode.EnforceAll;
 
+            // Compare in constant time...
+            var matches = TimingSafeEquals(pkthumb!, localPkthumb);
+
+            if(matches)
+            {
+                return new BootstrapDocResult
+                {
+                    Ok = true,
+                    FailureReason = "",
+                    Kid = reshdr.data.kid ?? "",
+                    Iss = iss,
+                    Payload = respayload.data,
+                    SignatureVerified = true,
+                    CnfChecked = true,
+                    CnfMatched = true
+                };
+            }
+
+            // Thumbprints do not match. Warn returns Ok=true with a diagnostic; Enforce fails.
+            var mismatchReason = $"cnf.pkthumb mismatch (local {localPkthumb}, hbd {pkthumb})";
             return new BootstrapDocResult
             {
-                Ok = finalOk,
-                FailureReason = finalOk ? null : $"cnf.jkt mismatch (expected local {localJkt}, got {jkt})",
+                Ok = isWarn,
+                FailureReason = mismatchReason,
                 Kid = reshdr.data.kid ?? "",
                 Iss = iss,
                 Payload = respayload.data,
                 SignatureVerified = true,
                 CnfChecked = true,
-                CnfMatched = matches
+                CnfMatched = false
             };
         }
 
@@ -547,18 +565,18 @@ namespace OGA.HBD.Service
             }
         }
 
-        static private (bool has, string? jkt) TryReadCnfJkt(JsonDocument payload)
+        static private (bool has, string? pkthumb) TryReadCnfPkthumb(JsonDocument payload)
         {
             var root = payload.RootElement;
 
             if (!root.TryGetProperty("cnf", out var cnf) || cnf.ValueKind == JsonValueKind.Null)
                 return (false, null);
 
-            if (!cnf.TryGetProperty("jkt", out var jktEl)) return (false, null);
+            if (!cnf.TryGetProperty("pkthumb", out var pkthumbEl)) return (false, null);
 
-            var jkt = jktEl.ValueKind == JsonValueKind.String ? jktEl.GetString() : null;
+            var pkthumb = pkthumbEl.ValueKind == JsonValueKind.String ? pkthumbEl.GetString() : null;
 
-            return (jkt is { Length: > 0 }, jkt);
+            return (pkthumb is { Length: > 0 }, pkthumb);
         }
 
         static private bool TimingSafeEquals(string a, string b)
