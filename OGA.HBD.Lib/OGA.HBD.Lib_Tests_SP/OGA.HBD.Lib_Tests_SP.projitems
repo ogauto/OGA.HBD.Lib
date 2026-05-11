@@ -9,7 +9,9 @@
     <Import_RootNamespace>OGA.HBD.Lib_Tests_SP</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)AsyncVerifierApi_Tests.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)CnfEvaluation_Tests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)EncoderAgreement_Tests.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ES256Issuer_LifeCycle_Tests.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ES256Issuer_Tests.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HBDSampleGeneration_Tests.cs" />

@@ -187,7 +187,7 @@ namespace OGA.HBD.Lib_Tests
                 // Set the key retrieval callback...
                 KeyRetrievalCallback = krcb,
                 // We want to verify the HBD lifetime...
-                // Yes, if your doc has iat/exp; you can leave this off for “stationary” mode
+                // Yes, if your doc has iat/exp; you can leave this off for ï¿½stationaryï¿½ mode
                 ValidateLifetime = false,
                 // This already defaults to two minutes.
                 // We will leave it at default...
@@ -196,7 +196,7 @@ namespace OGA.HBD.Lib_Tests
 
 
             // Verify the HBD...
-            var resver = HBD_ContextVerifier.Verify(hbdcontent2, settings);
+            var resver = await HBD_ContextVerifier.VerifyAsync(hbdcontent2, settings);
             if (resver == null || !resver.Ok || resver.Payload == null)
                 Assert.Fail("Wrong Value");
 
@@ -309,7 +309,7 @@ namespace OGA.HBD.Lib_Tests
                 // Set the key retrieval callback...
                 KeyRetrievalCallback = krcb,
                 // We want to verify the HBD lifetime...
-                // Yes, if your doc has iat/exp; you can leave this off for “stationary” mode
+                // Yes, if your doc has iat/exp; you can leave this off for ï¿½stationaryï¿½ mode
                 ValidateLifetime = false,
                 // This already defaults to two minutes.
                 // We will leave it at default...
@@ -318,7 +318,7 @@ namespace OGA.HBD.Lib_Tests
 
 
             // Verify the HBD...
-            var resver = HBD_ContextVerifier.Verify(hbdcontent2, settings);
+            var resver = await HBD_ContextVerifier.VerifyAsync(hbdcontent2, settings);
             if (resver == null || !resver.Ok || resver.Payload == null)
                 Assert.Fail("Wrong Value");
 
@@ -431,7 +431,7 @@ namespace OGA.HBD.Lib_Tests
                 // Set the key retrieval callback...
                 KeyRetrievalCallback = krcb,
                 // We want to verify the HBD lifetime...
-                // Yes, if your doc has iat/exp; you can leave this off for “stationary” mode
+                // Yes, if your doc has iat/exp; you can leave this off for ï¿½stationaryï¿½ mode
                 ValidateLifetime = false,
                 // This already defaults to two minutes.
                 // We will leave it at default...
@@ -440,7 +440,7 @@ namespace OGA.HBD.Lib_Tests
 
 
             // Verify the HBD...
-            var resver = HBD_ContextVerifier.Verify(hbdcontent2, settings);
+            var resver = await HBD_ContextVerifier.VerifyAsync(hbdcontent2, settings);
             if (resver == null || !resver.Ok || resver.Payload == null)
                 Assert.Fail("Wrong Value");
 
@@ -552,7 +552,7 @@ namespace OGA.HBD.Lib_Tests
                 // Set the key retrieval callback...
                 KeyRetrievalCallback = krcb,
                 // We want to verify the HBD lifetime...
-                // Yes, if your doc has iat/exp; you can leave this off for “stationary” mode
+                // Yes, if your doc has iat/exp; you can leave this off for ï¿½stationaryï¿½ mode
                 ValidateLifetime = false,
                 // This already defaults to two minutes.
                 // We will leave it at default...
@@ -561,7 +561,7 @@ namespace OGA.HBD.Lib_Tests
 
 
             // Verify the HBD...
-            var resver = HBD_ContextVerifier.Verify(hbdcontent2, settings);
+            var resver = await HBD_ContextVerifier.VerifyAsync(hbdcontent2, settings);
             if (resver == null || !resver.Ok || resver.Payload == null)
                 Assert.Fail("Wrong Value");
 
@@ -673,7 +673,7 @@ namespace OGA.HBD.Lib_Tests
                 // Set the key retrieval callback...
                 KeyRetrievalCallback = krcb,
                 // We want to verify the HBD lifetime...
-                // Yes, if your doc has iat/exp; you can leave this off for “stationary” mode
+                // Yes, if your doc has iat/exp; you can leave this off for ï¿½stationaryï¿½ mode
                 ValidateLifetime = false,
                 // This already defaults to two minutes.
                 // We will leave it at default...
@@ -682,7 +682,7 @@ namespace OGA.HBD.Lib_Tests
 
 
             // Verify the HBD...
-            var resver = HBD_ContextVerifier.Verify(hbdcontent2, settings);
+            var resver = await HBD_ContextVerifier.VerifyAsync(hbdcontent2, settings);
             if (resver == null || !resver.Ok || resver.Payload == null)
                 Assert.Fail("Wrong Value");
 
@@ -795,7 +795,7 @@ namespace OGA.HBD.Lib_Tests
                 // Set the key retrieval callback...
                 KeyRetrievalCallback = krcb,
                 // We want to verify the HBD lifetime...
-                // Yes, if your doc has iat/exp; you can leave this off for “stationary” mode
+                // Yes, if your doc has iat/exp; you can leave this off for ï¿½stationaryï¿½ mode
                 ValidateLifetime = false,
                 // This already defaults to two minutes.
                 // We will leave it at default...
@@ -804,7 +804,7 @@ namespace OGA.HBD.Lib_Tests
 
 
             // Verify the HBD...
-            var resver = HBD_ContextVerifier.Verify(hbdcontent2, settings);
+            var resver = await HBD_ContextVerifier.VerifyAsync(hbdcontent2, settings);
             if (resver == null || !resver.Ok || resver.Payload == null)
                 Assert.Fail("Wrong Value");
 
@@ -916,7 +916,7 @@ namespace OGA.HBD.Lib_Tests
                 // Set the key retrieval callback...
                 KeyRetrievalCallback = krcb,
                 // We want to verify the HBD lifetime...
-                // Yes, if your doc has iat/exp; you can leave this off for “stationary” mode
+                // Yes, if your doc has iat/exp; you can leave this off for ï¿½stationaryï¿½ mode
                 ValidateLifetime = false,
                 // This already defaults to two minutes.
                 // We will leave it at default...
@@ -925,7 +925,7 @@ namespace OGA.HBD.Lib_Tests
 
 
             // Verify the HBD...
-            var resver = HBD_ContextVerifier.Verify(hbdcontent2, settings);
+            var resver = await HBD_ContextVerifier.VerifyAsync(hbdcontent2, settings);
             if (resver == null || !resver.Ok || resver.Payload == null)
                 Assert.Fail("Wrong Value");
 
@@ -1037,7 +1037,7 @@ namespace OGA.HBD.Lib_Tests
                 // Set the key retrieval callback...
                 KeyRetrievalCallback = krcb,
                 // We want to verify the HBD lifetime...
-                // Yes, if your doc has iat/exp; you can leave this off for “stationary” mode
+                // Yes, if your doc has iat/exp; you can leave this off for ï¿½stationaryï¿½ mode
                 ValidateLifetime = false,
                 // This already defaults to two minutes.
                 // We will leave it at default...
@@ -1046,7 +1046,7 @@ namespace OGA.HBD.Lib_Tests
 
 
             // Verify the HBD...
-            var resver = HBD_ContextVerifier.Verify(hbdcontent2, settings);
+            var resver = await HBD_ContextVerifier.VerifyAsync(hbdcontent2, settings);
             if (resver == null || !resver.Ok || resver.Payload == null)
                 Assert.Fail("Wrong Value");
 
@@ -1158,7 +1158,7 @@ namespace OGA.HBD.Lib_Tests
                 // Set the key retrieval callback...
                 KeyRetrievalCallback = krcb,
                 // We want to verify the HBD lifetime...
-                // Yes, if your doc has iat/exp; you can leave this off for “stationary” mode
+                // Yes, if your doc has iat/exp; you can leave this off for ï¿½stationaryï¿½ mode
                 ValidateLifetime = false,
                 // This already defaults to two minutes.
                 // We will leave it at default...
@@ -1167,7 +1167,7 @@ namespace OGA.HBD.Lib_Tests
 
 
             // Verify the HBD...
-            var resver = HBD_ContextVerifier.Verify(hbdcontent2, settings);
+            var resver = await HBD_ContextVerifier.VerifyAsync(hbdcontent2, settings);
             if (resver == null || !resver.Ok || resver.Payload == null)
                 Assert.Fail("Wrong Value");
 
@@ -1279,7 +1279,7 @@ namespace OGA.HBD.Lib_Tests
                 // Set the key retrieval callback...
                 KeyRetrievalCallback = krcb,
                 // We want to verify the HBD lifetime...
-                // Yes, if your doc has iat/exp; you can leave this off for “stationary” mode
+                // Yes, if your doc has iat/exp; you can leave this off for ï¿½stationaryï¿½ mode
                 ValidateLifetime = false,
                 // This already defaults to two minutes.
                 // We will leave it at default...
@@ -1288,7 +1288,7 @@ namespace OGA.HBD.Lib_Tests
 
 
             // Verify the HBD...
-            var resver = HBD_ContextVerifier.Verify(hbdcontent2, settings);
+            var resver = await HBD_ContextVerifier.VerifyAsync(hbdcontent2, settings);
             if (resver == null || !resver.Ok || resver.Payload == null)
                 Assert.Fail("Wrong Value");
 
@@ -1400,7 +1400,7 @@ namespace OGA.HBD.Lib_Tests
                 // Set the key retrieval callback...
                 KeyRetrievalCallback = krcb,
                 // We want to verify the HBD lifetime...
-                // Yes, if your doc has iat/exp; you can leave this off for “stationary” mode
+                // Yes, if your doc has iat/exp; you can leave this off for ï¿½stationaryï¿½ mode
                 ValidateLifetime = false,
                 // This already defaults to two minutes.
                 // We will leave it at default...
@@ -1409,7 +1409,7 @@ namespace OGA.HBD.Lib_Tests
 
 
             // Verify the HBD...
-            var resver = HBD_ContextVerifier.Verify(hbdcontent2, settings);
+            var resver = await HBD_ContextVerifier.VerifyAsync(hbdcontent2, settings);
             if (resver == null || !resver.Ok || resver.Payload == null)
                 Assert.Fail("Wrong Value");
 
@@ -1521,7 +1521,7 @@ namespace OGA.HBD.Lib_Tests
                 // Set the key retrieval callback...
                 KeyRetrievalCallback = krcb,
                 // We want to verify the HBD lifetime...
-                // Yes, if your doc has iat/exp; you can leave this off for “stationary” mode
+                // Yes, if your doc has iat/exp; you can leave this off for ï¿½stationaryï¿½ mode
                 ValidateLifetime = false,
                 // This already defaults to two minutes.
                 // We will leave it at default...
@@ -1530,7 +1530,7 @@ namespace OGA.HBD.Lib_Tests
 
 
             // Verify the HBD...
-            var resver = HBD_ContextVerifier.Verify(hbdcontent2, settings);
+            var resver = await HBD_ContextVerifier.VerifyAsync(hbdcontent2, settings);
             if (resver == null || !resver.Ok || resver.Payload == null)
                 Assert.Fail("Wrong Value");
 
@@ -1643,7 +1643,7 @@ namespace OGA.HBD.Lib_Tests
                 // Set the key retrieval callback...
                 KeyRetrievalCallback = krcb,
                 // We want to verify the HBD lifetime...
-                // Yes, if your doc has iat/exp; you can leave this off for “stationary” mode
+                // Yes, if your doc has iat/exp; you can leave this off for ï¿½stationaryï¿½ mode
                 ValidateLifetime = false,
                 // This already defaults to two minutes.
                 // We will leave it at default...
@@ -1652,7 +1652,7 @@ namespace OGA.HBD.Lib_Tests
 
 
             // Verify the HBD...
-            var resver = HBD_ContextVerifier.Verify(hbdcontent2, settings);
+            var resver = await HBD_ContextVerifier.VerifyAsync(hbdcontent2, settings);
             if (resver == null || !resver.Ok || resver.Payload == null)
                 Assert.Fail("Wrong Value");
 
@@ -1765,7 +1765,7 @@ namespace OGA.HBD.Lib_Tests
                 // Set the key retrieval callback...
                 KeyRetrievalCallback = krcb,
                 // We want to verify the HBD lifetime...
-                // Yes, if your doc has iat/exp; you can leave this off for “stationary” mode
+                // Yes, if your doc has iat/exp; you can leave this off for ï¿½stationaryï¿½ mode
                 ValidateLifetime = false,
                 // This already defaults to two minutes.
                 // We will leave it at default...
@@ -1774,7 +1774,7 @@ namespace OGA.HBD.Lib_Tests
 
 
             // Verify the HBD...
-            var resver = HBD_ContextVerifier.Verify(hbdcontent2, settings);
+            var resver = await HBD_ContextVerifier.VerifyAsync(hbdcontent2, settings);
             if (resver == null || !resver.Ok || resver.Payload == null)
                 Assert.Fail("Wrong Value");
 
@@ -1887,7 +1887,7 @@ namespace OGA.HBD.Lib_Tests
                 // Set the key retrieval callback...
                 KeyRetrievalCallback = krcb,
                 // We want to verify the HBD lifetime...
-                // Yes, if your doc has iat/exp; you can leave this off for “stationary” mode
+                // Yes, if your doc has iat/exp; you can leave this off for ï¿½stationaryï¿½ mode
                 ValidateLifetime = false,
                 // This already defaults to two minutes.
                 // We will leave it at default...
@@ -1896,7 +1896,7 @@ namespace OGA.HBD.Lib_Tests
 
 
             // Verify the HBD...
-            var resver = HBD_ContextVerifier.Verify(hbdcontent2, settings);
+            var resver = await HBD_ContextVerifier.VerifyAsync(hbdcontent2, settings);
             if (resver == null || !resver.Ok || resver.Payload == null)
                 Assert.Fail("Wrong Value");
 

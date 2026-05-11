@@ -1,5 +1,7 @@
 # OGA.HBD: Implementation Directive — Spec Alignment Pass
 
+> **Status:** Archived. The work described in this directive landed in the first implementation pass on 2026-05-11. Subsequent passes are described in their own directives.
+
 **Target Spec:** `SPEC.md`, revision `2026-05-11T04:24:31Z`
 **Repository:** `https://github.com/ogauto/OGA.HBD.Lib`
 **Purpose:** Bring the codebase into alignment with the spec. This document is consumed by an implementing agent; after the work lands and the congruency-check OIs are resolved, this document is archived.

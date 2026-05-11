@@ -137,7 +137,7 @@ namespace OGA.HBD.Lib_Tests
         #region Warn Mode Tests (Work Item 2)
 
         [TestMethod]
-        public void Test_VerifySignatureAndCnfWarn_Match()
+        public async Task Test_VerifySignatureAndCnfWarn_Match()
         {
             var thumb = "MATCHEDTHUMB____________________________0";
             var (jws, krcb, iss) = this.SignHbdWithPkthumb(thumb);
@@ -151,7 +151,7 @@ namespace OGA.HBD.Lib_Tests
                 ValidateLifetime = false,
             };
 
-            var res = HBD_ContextVerifier.Verify(jws, settings);
+            var res = await HBD_ContextVerifier.VerifyAsync(jws, settings);
             if(res == null) Assert.Fail("Null result.");
             if(!res.Ok) Assert.Fail("Expected Ok=true on match.");
             if(!res.CnfChecked) Assert.Fail("Expected CnfChecked=true.");
@@ -160,7 +160,7 @@ namespace OGA.HBD.Lib_Tests
         }
 
         [TestMethod]
-        public void Test_VerifySignatureAndCnfWarn_Mismatch()
+        public async Task Test_VerifySignatureAndCnfWarn_Mismatch()
         {
             var hbdThumb = "HBDTHUMB________________________________0";
             var localThumb = "LOCALTHUMB______________________________0";
@@ -175,7 +175,7 @@ namespace OGA.HBD.Lib_Tests
                 ValidateLifetime = false,
             };
 
-            var res = HBD_ContextVerifier.Verify(jws, settings);
+            var res = await HBD_ContextVerifier.VerifyAsync(jws, settings);
             if(res == null) Assert.Fail("Null result.");
             if(!res.Ok) Assert.Fail("Warn mode should return Ok=true even on mismatch.");
             if(!res.CnfChecked) Assert.Fail("Expected CnfChecked=true.");
@@ -187,7 +187,7 @@ namespace OGA.HBD.Lib_Tests
         }
 
         [TestMethod]
-        public void Test_VerifySignatureAndCnfWarn_ProviderThrows()
+        public async Task Test_VerifySignatureAndCnfWarn_ProviderThrows()
         {
             var (jws, krcb, iss) = this.SignHbdWithPkthumb("THUMB___________________________________0");
 
@@ -200,7 +200,7 @@ namespace OGA.HBD.Lib_Tests
                 ValidateLifetime = false,
             };
 
-            var res = HBD_ContextVerifier.Verify(jws, settings);
+            var res = await HBD_ContextVerifier.VerifyAsync(jws, settings);
             if(res == null) Assert.Fail("Null result.");
             if(!res.Ok) Assert.Fail("Warn mode should return Ok=true even when the provider throws.");
             if(!res.CnfChecked) Assert.Fail("Expected CnfChecked=true.");
@@ -212,7 +212,7 @@ namespace OGA.HBD.Lib_Tests
         }
 
         [TestMethod]
-        public void Test_VerifySignatureAndCnfWarn_MissingCnf()
+        public async Task Test_VerifySignatureAndCnfWarn_MissingCnf()
         {
             // No cnf populated on the HBD...
             var (jws, krcb, iss) = this.SignHbdWithPkthumb(null);
@@ -226,7 +226,7 @@ namespace OGA.HBD.Lib_Tests
                 ValidateLifetime = false,
             };
 
-            var res = HBD_ContextVerifier.Verify(jws, settings);
+            var res = await HBD_ContextVerifier.VerifyAsync(jws, settings);
             if(res == null) Assert.Fail("Null result.");
             if(res.Ok) Assert.Fail("Missing cnf should fail in Warn mode.");
             if(string.IsNullOrWhiteSpace(res.FailureReason)) Assert.Fail("Expected FailureReason.");
@@ -235,7 +235,7 @@ namespace OGA.HBD.Lib_Tests
         }
 
         [TestMethod]
-        public void Test_VerifySignatureAndCnfWarn_NullProvider()
+        public async Task Test_VerifySignatureAndCnfWarn_NullProvider()
         {
             var (jws, krcb, iss) = this.SignHbdWithPkthumb("THUMB___________________________________0");
 
@@ -248,7 +248,7 @@ namespace OGA.HBD.Lib_Tests
                 ValidateLifetime = false,
             };
 
-            var res = HBD_ContextVerifier.Verify(jws, settings);
+            var res = await HBD_ContextVerifier.VerifyAsync(jws, settings);
             if(res == null) Assert.Fail("Null result.");
             if(res.Ok) Assert.Fail("Null provider should fail in Warn mode.");
             if(string.IsNullOrWhiteSpace(res.FailureReason)) Assert.Fail("Expected FailureReason.");
@@ -262,7 +262,7 @@ namespace OGA.HBD.Lib_Tests
         #region Enforce Mode Tests (Work Item 2)
 
         [TestMethod]
-        public void Test_EnforceAll_Match()
+        public async Task Test_EnforceAll_Match()
         {
             var thumb = "ENFORCEMATCH____________________________0";
             var (jws, krcb, iss) = this.SignHbdWithPkthumb(thumb);
@@ -276,7 +276,7 @@ namespace OGA.HBD.Lib_Tests
                 ValidateLifetime = false,
             };
 
-            var res = HBD_ContextVerifier.Verify(jws, settings);
+            var res = await HBD_ContextVerifier.VerifyAsync(jws, settings);
             if(res == null) Assert.Fail("Null result.");
             if(!res.Ok) Assert.Fail("Expected Ok=true on match.");
             if(!res.CnfChecked) Assert.Fail("Expected CnfChecked=true.");
@@ -284,7 +284,7 @@ namespace OGA.HBD.Lib_Tests
         }
 
         [TestMethod]
-        public void Test_EnforceAll_Mismatch()
+        public async Task Test_EnforceAll_Mismatch()
         {
             var (jws, krcb, iss) = this.SignHbdWithPkthumb("HBDTHUMB________________________________0");
 
@@ -297,7 +297,7 @@ namespace OGA.HBD.Lib_Tests
                 ValidateLifetime = false,
             };
 
-            var res = HBD_ContextVerifier.Verify(jws, settings);
+            var res = await HBD_ContextVerifier.VerifyAsync(jws, settings);
             if(res == null) Assert.Fail("Null result.");
             if(res.Ok) Assert.Fail("Enforce mode should fail on mismatch.");
             if(!res.CnfChecked) Assert.Fail("Expected CnfChecked=true.");
@@ -308,7 +308,7 @@ namespace OGA.HBD.Lib_Tests
         }
 
         [TestMethod]
-        public void Test_EnforceAll_ProviderThrows()
+        public async Task Test_EnforceAll_ProviderThrows()
         {
             var (jws, krcb, iss) = this.SignHbdWithPkthumb("THUMB___________________________________0");
 
@@ -321,7 +321,7 @@ namespace OGA.HBD.Lib_Tests
                 ValidateLifetime = false,
             };
 
-            var res = HBD_ContextVerifier.Verify(jws, settings);
+            var res = await HBD_ContextVerifier.VerifyAsync(jws, settings);
             if(res == null) Assert.Fail("Null result.");
             if(res.Ok) Assert.Fail("Enforce mode should fail when provider throws.");
             if(string.IsNullOrWhiteSpace(res.FailureReason)) Assert.Fail("Expected FailureReason.");
@@ -330,7 +330,7 @@ namespace OGA.HBD.Lib_Tests
         }
 
         [TestMethod]
-        public void Test_EnforceAll_MissingCnf()
+        public async Task Test_EnforceAll_MissingCnf()
         {
             var (jws, krcb, iss) = this.SignHbdWithPkthumb(null);
 
@@ -343,7 +343,7 @@ namespace OGA.HBD.Lib_Tests
                 ValidateLifetime = false,
             };
 
-            var res = HBD_ContextVerifier.Verify(jws, settings);
+            var res = await HBD_ContextVerifier.VerifyAsync(jws, settings);
             if(res == null) Assert.Fail("Null result.");
             if(res.Ok) Assert.Fail("Missing cnf should fail in Enforce mode.");
             if(string.IsNullOrWhiteSpace(res.FailureReason)) Assert.Fail("Expected FailureReason.");
@@ -352,7 +352,7 @@ namespace OGA.HBD.Lib_Tests
         }
 
         [TestMethod]
-        public void Test_EnforceAll_NullProvider()
+        public async Task Test_EnforceAll_NullProvider()
         {
             var (jws, krcb, iss) = this.SignHbdWithPkthumb("THUMB___________________________________0");
 
@@ -365,7 +365,7 @@ namespace OGA.HBD.Lib_Tests
                 ValidateLifetime = false,
             };
 
-            var res = HBD_ContextVerifier.Verify(jws, settings);
+            var res = await HBD_ContextVerifier.VerifyAsync(jws, settings);
             if(res == null) Assert.Fail("Null result.");
             if(res.Ok) Assert.Fail("Null provider should fail in Enforce mode.");
             if(string.IsNullOrWhiteSpace(res.FailureReason)) Assert.Fail("Expected FailureReason.");

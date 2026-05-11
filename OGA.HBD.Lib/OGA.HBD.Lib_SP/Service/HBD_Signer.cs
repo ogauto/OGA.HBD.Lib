@@ -1,4 +1,5 @@
 using Jose;
+using Microsoft.IdentityModel.Tokens;
 using OGA.HBD.Helpers;
 using OGA.HBD.Model;
 using System;
@@ -37,6 +38,19 @@ namespace OGA.HBD.Service
         /// HBDs whose iat or exp is zero/negative, or whose exp is not strictly greater than iat.
         /// (See FR-03 and KD-03 in SPEC.md.)
         /// </summary>
+        /// <param name="payload">The HBD to sign. <c>iat</c> and <c>exp</c> must be populated; see KD-03.</param>
+        /// <param name="issuerPrivateKey">The issuer's ECDsa private key.</param>
+        /// <param name="kid">The kid to embed in the JWS header.</param>
+        /// <returns>
+        /// A tuple of (res, val) where val is the JWS compact serialization when successful.
+        /// Result codes:
+        ///   <list type="bullet">
+        ///     <item><description><c>1</c> — success; val contains the signed JWS.</description></item>
+        ///     <item><description><c>-1</c> — null or blank required argument (payload, issuerPrivateKey, or kid).</description></item>
+        ///     <item><description><c>-2</c> — caught exception during signing; val is null.</description></item>
+        ///     <item><description><c>-3</c> — invalid iat or exp (zero, negative, or exp not strictly greater than iat).</description></item>
+        ///   </list>
+        /// </returns>
         static public (int res, string? val) CreateBootstrapJws(Host_BootstrapDoc payload, ECDsa issuerPrivateKey, string kid)
         {
             try
@@ -102,7 +116,7 @@ namespace OGA.HBD.Service
             var pem = File.ReadAllText(spkiPemPath);
             var spki = PEMConverter.ExtractKey_fromPem(pem, "PUBLIC KEY");
             var hash = SHA256.HashData(spki);
-            return Jose.Base64Url.Encode(hash);
+            return Base64UrlEncoder.Encode(hash);
         }
 
         /// <summary>
@@ -112,8 +126,8 @@ namespace OGA.HBD.Service
         {
             // Build JWK (public only). Parameters come from the curve key.
             var pubParams = issuerPrivateKey.ExportParameters(false);
-            var x = Jose.Base64Url.Encode(pubParams.Q.X);
-            var y = Jose.Base64Url.Encode(pubParams.Q.Y);
+            var x = Base64UrlEncoder.Encode(pubParams.Q.X);
+            var y = Base64UrlEncoder.Encode(pubParams.Q.Y);
 
             var jwk = new
             {

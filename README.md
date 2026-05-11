@@ -66,7 +66,7 @@ var settings = new VerificationSettings {
     ValidateLifetime = true
 };
 
-var verification = HBD_ContextVerifier.Verify(hbdJws, settings);
+var verification = await HBD_ContextVerifier.VerifyAsync(hbdJws, settings);
 if (verification.Ok) {
     var (recRes, hostInfo) = HostInfo_V1.RecoverHostInfo_fromPayload(verification.Payload);
     // hostInfo.clusterName, hostInfo.environment, hostInfo.gcBaseUrl, etc.
@@ -74,21 +74,6 @@ if (verification.Ok) {
 ```
 
 For verification mode semantics (ParseOnly / VerifySignature / VerifySignatureAndCnfWarn / EnforceAll), see SPEC.md §6.5.
-
-## Current implementation status
-
-The library implements:
-
-- HBD construction, signing, and JWS encoding (issuer side).
-- Issuer key generation, persistence as PKCS#8 PEM, and JWKS export.
-- Verification in `ParseOnly` and `VerifySignature` modes.
-- The `ILocalKeyThumbprintProvider` interface and the `SpkiFileThumbprintProvider` PEM-file implementation.
-
-The library does not yet implement:
-
-- The `VerifySignatureAndCnfWarn` and `EnforceAll` verification modes. These are designed (see SPEC.md §6.5 and FR-17/FR-18) and the supporting types exist (`ConfirmationInfo.pkthumb`, `LocalThumbprintProvider` plumbing), but the verifier currently returns an error result when invoked in these modes. The work to close this gap is tracked in `docs/IMPLEMENTATION_DIRECTIVE_2026-05-11.md`.
-
-Until those modes are implemented, the library is usable as an identity-claim format (signature-verified host metadata) but not as a proof-of-possession credential.
 
 ## Platform support
 

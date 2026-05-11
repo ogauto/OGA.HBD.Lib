@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.IdentityModel.Tokens;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -61,7 +62,7 @@ namespace OGA.HBD.Helpers
             byte[] pkcs8 = ecdsa.ExportPkcs8PrivateKey();
 
             // Create a URL-safe hash of the public key, that will be the key id...
-            var kid = Base64Url(SHA256.HashData(spki));
+            var kid = Base64UrlEncoder.Encode(SHA256.HashData(spki));
 
             // Retrieve the public key material...
             var p = ecdsa.ExportParameters(false);
@@ -69,7 +70,7 @@ namespace OGA.HBD.Helpers
             // Create the key output...
             var jwks = System.Text.Json.JsonSerializer.Serialize(
                 new {
-                        keys = new[] { new { kty="EC", crv="P-256", x=Base64Url(p.Q.X), y=Base64Url(p.Q.Y), use="sig", alg="ES256", kid } }
+                        keys = new[] { new { kty="EC", crv="P-256", x=Base64UrlEncoder.Encode(p.Q.X), y=Base64UrlEncoder.Encode(p.Q.Y), use="sig", alg="ES256", kid } }
                     });
 
             // Return properties to the caller...
@@ -79,8 +80,16 @@ namespace OGA.HBD.Helpers
         /// <summary>
         /// Attempts to retrieve the private key of an ECDsa instance, in PKCS#8 format.
         /// </summary>
-        /// <param name="ecdsa"></param>
-        /// <returns></returns>
+        /// <param name="ecdsa">The ECDsa key instance to export.</param>
+        /// <returns>
+        /// A tuple of (res, pkcs8) where pkcs8 contains the PKCS#8 bytes when successful.
+        /// Result codes:
+        ///   <list type="bullet">
+        ///     <item><description><c>1</c> — success; pkcs8 contains the exported bytes.</description></item>
+        ///     <item><description><c>-1</c> — null ecdsa argument.</description></item>
+        ///     <item><description><c>-2</c> — caught exception during export; pkcs8 is null.</description></item>
+        ///   </list>
+        /// </returns>
         static public (int res, byte[]? pkcs8) Get_PrivKeyPKCS8_from_ECDsaInstance(ECDsa ecdsa)
         {
             try
@@ -101,8 +110,15 @@ namespace OGA.HBD.Helpers
         /// <summary>
         /// Attempts to create an ECDsa instance from the bytes of a pkcs#8 private key.
         /// </summary>
-        /// <param name="pkcs8"></param>
-        /// <returns></returns>
+        /// <param name="pkcs8">The PKCS#8 private key bytes.</param>
+        /// <returns>
+        /// A tuple of (res, issuer) where issuer is the created ECDsa instance when successful.
+        /// Result codes:
+        ///   <list type="bullet">
+        ///     <item><description><c>1</c> — success; issuer contains the in-memory ECDsa key.</description></item>
+        ///     <item><description><c>-2</c> — caught exception during import (malformed pkcs8 or other failure); issuer is null.</description></item>
+        ///   </list>
+        /// </returns>
         static public (int res, ECDsa? issuer) CreateIssuer_fromPrivatePKCS8(byte[] pkcs8)
         {
             bool success = false;
@@ -136,6 +152,15 @@ namespace OGA.HBD.Helpers
         /// <summary>
         /// Load an ES256 issuer private key from PKCS#8 PEM.
         /// </summary>
+        /// <param name="pemPath">Path to a PKCS#8 PEM-encoded private-key file on disk.</param>
+        /// <returns>
+        /// A tuple of (res, issuer) where issuer is the loaded ECDsa instance when successful.
+        /// Result codes:
+        ///   <list type="bullet">
+        ///     <item><description><c>1</c> — success; issuer contains the in-memory ECDsa key.</description></item>
+        ///     <item><description><c>-1</c> — file unreadable, PEM unparseable, or ECDsa import failed; issuer is null. (Underlying failure modes from <see cref="PEMConverter.Load_PrivatePEMFile_toPKCS8(string)"/> and <see cref="CreateIssuer_fromPrivatePKCS8(byte[])"/> are collapsed into this single code.)</description></item>
+        ///   </list>
+        /// </returns>
         static public (int res, ECDsa? issuer) LoadIssuer_fromPrivateKeyPEMPkcs8(string pemPath)
         {
             var resload = PEMConverter.Load_PrivatePEMFile_toPKCS8(pemPath);
@@ -149,15 +174,5 @@ namespace OGA.HBD.Helpers
             return (1, rescreate.issuer);
         }
 
-        /// <summary>
-        /// Helper method that will create the base64 output of an ES256 key...
-        /// </summary>
-        /// <param name="b"></param>
-        /// <returns></returns>
-        static private string Base64Url(byte[] b)
-        {
-            var s = Convert.ToBase64String(b).TrimEnd('=').Replace('+','-').Replace('/','_');
-            return s;
-        }
     }
 }

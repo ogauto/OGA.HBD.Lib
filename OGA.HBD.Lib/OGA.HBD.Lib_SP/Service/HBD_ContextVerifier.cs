@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Threading.Tasks;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using OGA.HBD.Helpers;
@@ -38,13 +39,13 @@ namespace OGA.HBD.Service
         ///     Contains a header (with algo, token type, and kid)
         ///     Token Type is correct
         ///     Contains an algorithm that we can use to verify
-        ///     Contains 
+        ///     Contains required claims
         /// It must be passed a key retrieval callback, to retrieve the required key for verification (if needed).
         /// </summary>
-        /// <param name="jwsCompact"></param>
-        /// <param name="versettings"></param>
-        /// <returns></returns>
-        static public BootstrapDocResult Verify(string jwsCompact, VerificationSettings versettings)
+        /// <param name="jwsCompact">The JWS compact serialization to verify.</param>
+        /// <param name="versettings">Verification settings (mode, allowed issuers, callbacks).</param>
+        /// <returns>A <see cref="BootstrapDocResult"/> describing the outcome.</returns>
+        static public async Task<BootstrapDocResult> VerifyAsync(string jwsCompact, VerificationSettings versettings)
         {
             if(string.IsNullOrWhiteSpace(jwsCompact))
             {
@@ -246,7 +247,7 @@ namespace OGA.HBD.Service
                 };
 
                 // Now, attempt to verify the token...
-                var validation = handler.ValidateToken(trimmed, tvp);
+                var validation = await handler.ValidateTokenAsync(trimmed, tvp);
                 if (!validation.IsValid)
                 {
                     return Fail("Signature validation failed: " + (validation.Exception?.Message ?? "invalid"));

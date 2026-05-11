@@ -5,7 +5,7 @@
 **Author:** [Project owner]
 **Status:** Draft
 **Created:** 2026-05-10T09:05:32Z
-**Last Updated:** 2026-05-11T04:24:31Z
+**Last Updated:** 2026-05-11T05:55:38Z
 **Related Documents:** None at this revision. Future related documents include the `groundcontrol` central authority spec and the host provisioning script spec, both of which will reference this document as a foundation.
 
 ---
@@ -162,7 +162,7 @@ SHALL is the default and the strong preference for all requirement statements. A
 
 ### 2.2 Verification
 
-**FR-04 — Verify an HBD signature.** The library shall provide a verification function that takes a JWS-encoded HBD and a verification settings object, and returns a verification result indicating whether the signature is valid. The function shall not throw on malformed input; it shall return a result with `Ok = false` and a populated `FailureReason`.
+**FR-04 — Verify an HBD signature.** The library shall provide an asynchronous verification function that takes a JWS-encoded HBD and a verification settings object, and returns a verification result indicating whether the signature is valid. The function shall not throw on malformed input; it shall return a result with `Ok = false` and a populated `FailureReason`. Asynchrony in the verifier reflects the upstream `Microsoft.IdentityModel` validation pipeline's async API and is documented in OI-15.
 
 **FR-05 — Verification mode ladder.** Verification shall support four modes of strictness, each a strict superset of the previous: ParseOnly, VerifySignature, VerifySignatureAndCnfWarn, EnforceAll. Mode semantics are defined in §6.5.
 
@@ -401,7 +401,7 @@ An HBD is a JWS in compact serialization, of the form `<header>.<payload>.<signa
 | `creationTime` | int (Unix seconds) | Required | When the host was created (distinct from HBD `iat`) |
 | `clusterId` | string | Required | Identifier of the cluster the host participates in |
 | `clusterName` | string | Required | Human-readable cluster name |
-| `environment` | string | Required | One of: `dev`, `test`, `stage`, `val`, `prod` (case-sensitive, lowercase) |
+| `environment` | string | Required | Operator-defined. The convention in this fleet is one of `dev`, `test`, `stage`, `val`, `prod` (lowercase). The library does not validate this field; see KD-07 on the library's general posture toward opaque string claims. |
 | `gcBaseUrl` | string | Required | Base URL of the host's assigned groundcontrol channel |
 
 The `gcBaseUrl` field is required by the recovery function (`HostInfo_V1.RecoverHostInfo_fromPayload`); HBDs lacking it cannot be recovered into a HostInfo_V1 instance. This is consistent with the field's role: the HBD tells the host where its controller is, and an HBD without that information cannot fulfill its role. (See OI-09 for the implication that historic test fixtures predate this field.)
@@ -579,7 +579,7 @@ Two flows touch the library directly. Their full architectural context is sketch
 
 **HBD issuance.** A host needs an HBD. The host (or its provisioning script) presents itself to the issuing authority (groundcontrol, in some role like `bootstrap-ca`). The minting protocol — out of scope for this spec — establishes that the requesting host owns a particular binding-key public half. Once that is established, the issuer constructs a `Host_BootstrapDoc` populated with the host's metadata (region, cluster, tenant, environment, etc.), the issuer's URN as `iss`, current Unix time as `iat`, an `exp` consistent with the issuer's lifetime policy, the `gcBaseUrl` that points the host at its assigned controller channel, and a `cnf.pkthumb` containing the SPKI thumbprint of the host's binding-key public half. The issuer calls `HBD_Signer.CreateBootstrapJws` with the document, the issuer's private key, and the kid. The resulting JWS string is returned to the host (via the minting protocol) where the host stores it according to whatever convention the consumer system has established.
 
-**HBD verification on a host.** The HCS or HCS bootstrap, on a host, holds an HBD as a JWS string. It needs to confirm the HBD is authentic and (in production) that this host owns the binding key the HBD references. The host constructs a `VerificationSettings` populated with: the appropriate verification mode (typically `EnforceAll` in production, `VerifySignature` in early-deployment / pre-cnf-implementation phases), the set of allowed issuers (the URNs the host trusts to issue its HBDs), a key retrieval callback that resolves issuer kids to public keys (typically against a JWKS file the host received at provisioning, or a caching wrapper around such a file), and an `ILocalKeyThumbprintProvider` configured to read the host's binding-key public PEM. The host calls `HBD_ContextVerifier.Verify` with the JWS and the settings. The result tells the host whether the HBD is trustworthy and, in non-bare modes, whether the binding to this host was confirmed.
+**HBD verification on a host.** The HCS or HCS bootstrap, on a host, holds an HBD as a JWS string. It needs to confirm the HBD is authentic and (in production) that this host owns the binding key the HBD references. The host constructs a `VerificationSettings` populated with: the appropriate verification mode (typically `EnforceAll` in production, `VerifySignature` in early-deployment / pre-cnf-implementation phases), the set of allowed issuers (the URNs the host trusts to issue its HBDs), a key retrieval callback that resolves issuer kids to public keys (typically against a JWKS file the host received at provisioning, or a caching wrapper around such a file), and an `ILocalKeyThumbprintProvider` configured to read the host's binding-key public PEM. The host awaits `HBD_ContextVerifier.VerifyAsync` with the JWS and the settings. The result tells the host whether the HBD is trustworthy and, in non-bare modes, whether the binding to this host was confirmed.
 
 ### 9.3 User Workflow Narration
 
@@ -596,7 +596,7 @@ For reference, the principal public entry points consumers call directly are:
 - `HBD_Signer.CreateBootstrapJws(payload, issuerPrivateKey, kid)` — sign an HBD.
 - `HBD_Signer.ComputePkthumbFromSpkiPem(spkiPemPath)` — utility for issuer-side computation of a `cnf.pkthumb` value. (Currently named `ComputeJktFromSpkiPem`; renamed as part of the rename pass.)
 - `HBD_Signer.ExportJwks(issuerPrivateKey, kid)` — produce JWKS for distribution.
-- `HBD_ContextVerifier.Verify(jwsCompact, versettings)` — verify an HBD.
+- `HBD_ContextVerifier.VerifyAsync(jwsCompact, versettings)` — verify an HBD. Returns `Task<BootstrapDocResult>`.
 - `HostInfo_V1.RecoverHostInfo_fromPayload(payload)` — recover strongly-typed claims from a verified payload.
 - `ES256_Issuer.Create_NewIssuer()` — generate a new issuer keypair.
 - `ES256_Issuer.LoadIssuer_fromPrivateKeyPEMPkcs8(pemPath)` — reload an issuer from a stored PEM.
@@ -820,28 +820,117 @@ The XML doc comment on `ConfirmationInfo.jkt` cites RFC 7638 and includes a left
 
 Originally tracked the filename `PublicKeyRing.cs` containing class `PublicKeyCache`. The project owner has renamed the file; the change is pushed to the repository. No implementer action required.
 
-### OI-12 — Congruency check: cnf evaluation matches §6.5 [planted, awaiting implementation]
+### OI-12 — Congruency check: cnf evaluation matches §6.5 [resolved]
 
-After the cnf implementation pass lands, confirm that the verifier's behavior across all branches of cnf evaluation — match, mismatch in Warn, mismatch in Enforce, missing cnf in Warn/Enforce, local-thumbprint-provider exception in Warn, local-thumbprint-provider exception in Enforce — matches §6.5 and FR-17 / FR-18 exactly. Confirm test coverage exercises each branch.
+**Resolution.** The cnf evaluation implementation pass landed in `[commit: TBD]` and was verified against §6.5 and FR-17 / FR-18. The verifier's behavior across all branches of cnf evaluation — match, mismatch in Warn, mismatch in Enforce, missing cnf in Warn/Enforce, local-thumbprint-provider exception in Warn, local-thumbprint-provider exception in Enforce — matches the spec. Test coverage exercises each branch. The project owner confirmed test results on a development VM (the implementer did not have the credential infrastructure to run the full test suite directly).
 
-### OI-13 — Congruency check: `pkthumb` rename is complete [planted, awaiting implementation]
+### OI-13 — Congruency check: `pkthumb` rename is complete [resolved]
 
-After the rename pass lands, confirm:
-- The wire format uses `pkthumb` and no JSON `"jkt"` field name appears anywhere in production code paths.
-- The C# property is `ConfirmationInfo.Pkthumb` (or equivalent).
-- Helper methods are `ComputePkthumbFromSpkiPem` and `GetLocalPkthumb` (or equivalent).
-- The `ILocalKeyThumbprintProvider` interface method is renamed.
-- The XML doc comment on `ConfirmationInfo.Pkthumb` is rewritten per OI-10.
-- The doc comments on `ILocalKeyThumbprintProvider` and `SpkiFileThumbprintProvider` point to the Windows cert-store provider's location per OI-04.
-- Test fixtures are updated to use the new field name; no stale `"jkt"` strings remain in test code.
+**Resolution.** The rename pass landed in `[commit: TBD]`. The wire format uses `pkthumb`; the C# property is `ConfirmationInfo.pkthumb`; helper methods are `ComputePkthumbFromSpkiPem` and `GetLocalPkthumb`; the `ILocalKeyThumbprintProvider` interface method is renamed; the XML doc comment on `ConfirmationInfo.pkthumb` is rewritten per OI-10; the doc comments on `ILocalKeyThumbprintProvider` and `SpkiFileThumbprintProvider` point to the Windows cert-store provider's location per OI-04; test fixtures are updated. No stale `"jkt"` strings remain in production code paths.
 
-### OI-14 — Congruency check: signer iat/exp validation [planted, awaiting implementation]
+### OI-14 — Congruency check: signer iat/exp validation [resolved]
 
-After the signer-validation pass lands, confirm that `HBD_Signer.CreateBootstrapJws` rejects (without signing) HBDs whose `iat` is zero or negative, whose `exp` is zero or negative, or whose `exp` is not strictly greater than `iat`. Confirm tests exercise each rejection path.
+**Resolution.** The signer-validation pass landed in `[commit: TBD]`. `HBD_Signer.CreateBootstrapJws` rejects HBDs whose `iat` is zero or negative, whose `exp` is zero or negative, or whose `exp` is not strictly greater than `iat`. Tests exercise each rejection path.
+
+### OI-15 — Migrate verifier from `JsonWebTokenHandler.ValidateToken` to `ValidateTokenAsync` [resolved: scoped to implementation]
+
+Microsoft.IdentityModel.JsonWebTokens has marked the synchronous `ValidateToken(string, TokenValidationParameters)` overload as deprecated, with a `[System.Obsolete]` attribute and a "will be removed in a future release" notice. The verifier calls it at `HBD_ContextVerifier.cs:249` and triggers a CS0618 warning at compile time. As of Microsoft.IdentityModel.JsonWebTokens v8.x the removal version is not announced; the deprecation is real but the timeline is not.
+
+The async replacement, `ValidateTokenAsync`, returns `Task<TokenValidationResult>`. There is no safe sync-over-async pattern available at the call site — `.Result` and `.GetAwaiter().GetResult()` are well-known antipatterns that risk deadlock in some hosting contexts. Migrating the call therefore forces the public verifier surface to become async.
+
+**Resolution.** Convert `HBD_ContextVerifier.Verify` in place to `HBD_ContextVerifier.VerifyAsync`, returning `Task<BootstrapDocResult>`. The sync `Verify` method is removed, not preserved as a wrapper. The library has few enough consumers (HCS, HCS bootstrap, tests) that the migration cost is small, and the in-place option avoids carrying a deprecated path indefinitely. Tests are updated to await the new method. The README's quick-start example is updated to async form. Cross-references in this spec to `Verify` are updated to `VerifyAsync` (§9.2, §10, FR-04).
+
+**Alternatives considered.** Adding `VerifyAsync` alongside the existing sync `Verify`. Rejected: the sync method would either disappear when Microsoft removes `ValidateToken` (now-breaking) or become a sync-over-async wrapper (which has the deadlock risk we're trying to avoid). The in-place migration is the eventual destination regardless; doing it now closes the gap once.
+
+**Note for future revisions.** Going async at the verifier level opens the door to making the key-retrieval callback async, which would be a future-friendly change if/when callbacks need I/O (e.g., fetching a JWKS over HTTP). That is not part of this resolution and is left for a future spec revision if/when the need arises. The current callback signature (`dKeyRetrievalCallback`, returning `(int, SecurityKey?)` synchronously) is unchanged in this pass.
+
+A congruency-check OI (OI-18) is planted to verify the implementation once the work lands.
+
+### OI-16 — Standardize on a single base64url encoder [resolved]
+
+The signer and verifier compute the same logical value (`base64url(SHA-256(SPKI_DER))` — the `pkthumb`) using two different libraries: `HBD_Signer.ComputePkthumbFromSpkiPem` uses `Jose.Base64Url.Encode`, while `SpkiFileThumbprintProvider.GetLocalPkthumb` uses `Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode`. The two encoders produce identical output today, but the signer side and verifier side computing the same `pkthumb` via different encoder libraries is a subtle interop risk if either library ever changes its padding or encoding behavior in a future version.
+
+**Resolution.** Standardize on `Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode` throughout the library. The signer switches its import. Reasons:
+- The verifier already depends on Microsoft.IdentityModel.Tokens for its validation pipeline; aligning the encoder with the validation library keeps the verifier's encoding behavior synchronized with the library it most tightly depends on.
+- Microsoft.IdentityModel is the more load-bearing of the library's two JOSE dependencies; aligning on the more-load-bearing library reduces the surface area where divergence could happen.
+- jose-jwt remains a dependency for `JWT.Encode` (the actual JWS encoding step in the signer); this change touches only the thumbprint computation.
+
+**Alternatives considered.** Standardizing on `Jose.Base64Url` instead. Equivalent cost (one import change) but aligns with the less load-bearing library; rejected. Writing a custom base64url encoder in the library to eliminate both library dependencies for this operation. Tempting given how small base64url is, but introduces a small amount of crypto-adjacent code we'd be responsible for, with the failure mode of producing self-consistent-but-ecosystem-incompatible output if there's any bug. Rejected; the libraries are stable enough that standardizing on one is the safer practical choice.
+
+A congruency-check OI (OI-19) is planted to verify the implementation once the work lands.
+
+### OI-17 — Document signer/verifier result codes [resolved]
+
+The signer's `CreateBootstrapJws` returns an `(int res, string val)` tuple where `res == 1` indicates success and negative values indicate failure modes. After the iat/exp validation work added by OI-08, three negative failure codes exist: `-1` for null/blank arguments, `-2` for caught exceptions, `-3` for invalid iat/exp. A caller can distinguish success from failure but cannot distinguish failure modes without reading source. The verifier's `BootstrapDocResult` is richer (carries `Ok`, `FailureReason`, and other diagnostic fields) and does not have this issue, but several signer-side methods follow the same magic-number convention.
+
+**Resolution.** Add XML doc comment tables on signer methods that return multi-value result codes, enumerating each code and what it means. The lightweight approach preserves the existing API (no breaking changes for callers) while making the codes self-documenting in IntelliSense.
+
+Methods to be documented:
+- `HBD_Signer.CreateBootstrapJws` — codes `1` (success), `-1` (null/blank argument), `-2` (caught exception), `-3` (invalid iat/exp).
+- Any other signer/helper methods that use the same convention with multiple failure codes. The implementer should audit and document any found.
+
+**Alternatives considered.** Introducing a strongly-typed result enum (`HbdSignResult.Success`, `.NullOrBlankArgument`, etc.) and changing the return type. Cleaner but breaks every caller of the signer. Deferred to a hypothetical future API revision where the broader signer surface might be reworked at the same time.
+
+A congruency-check OI (OI-20) is planted to verify the documentation once the work lands.
+
+### OI-18 — Congruency check: async migration is complete [planted, awaiting implementation]
+
+After the OI-15 async migration lands, confirm:
+- `HBD_ContextVerifier.VerifyAsync` exists and returns `Task<BootstrapDocResult>`.
+- `HBD_ContextVerifier.Verify` (the sync version) is removed entirely — no wrapper, no `.GetAwaiter().GetResult()` shim.
+- The call site at the former `HBD_ContextVerifier.cs:249` uses `await handler.ValidateTokenAsync(...)`.
+- No `[System.Obsolete]` warnings remain at build time related to `ValidateToken`.
+- All tests are updated to `await` the new method and continue to pass.
+- The README quick-start example uses `await HBD_ContextVerifier.VerifyAsync(...)`.
+
+### OI-19 — Congruency check: single base64url encoder [planted, awaiting implementation]
+
+After the OI-16 standardization lands, confirm:
+- `HBD_Signer.ComputePkthumbFromSpkiPem` uses `Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode`.
+- No references to `Jose.Base64Url.Encode` (or equivalent) for `pkthumb` computation remain anywhere in the library.
+- The jose-jwt dependency is retained for `JWT.Encode` in the signer; it is not removed wholesale. (jose-jwt's role narrows to JWS encoding only.)
+- A regression test, if practical to add, confirms that signer-computed and verifier-computed thumbprints match byte-for-byte over a representative set of EC P-256 keys.
+
+### OI-20 — Congruency check: result-code documentation [planted, awaiting implementation]
+
+After the OI-17 documentation work lands, confirm:
+- `HBD_Signer.CreateBootstrapJws` carries an XML doc comment that enumerates each return code value and its meaning, with each code documented as `<returns>` content or in a dedicated `<remarks>` table.
+- The implementer's audit identified any other signer-side methods using the same magic-number convention with multiple failure codes; each is documented similarly.
+- IntelliSense in Visual Studio shows the return-code documentation on hover for callers.
 
 ---
 
 ## 14. Revision Log
+
+### 2026-05-11T05:55:38Z
+
+Third revision. Closes the congruency-check OIs from the previous implementation pass and plants three new resolutions (OI-15, OI-16, OI-17) with their own congruency checks (OI-18, OI-19, OI-20). Adds a small wording correction to §6.2.
+
+Substantive changes:
+
+- **§6.2 (HostInfo schema):** softened the `environment` field description. Previously stated the field shall be "one of `dev`, `test`, `stage`, `val`, `prod` (case-sensitive, lowercase)." Now describes those values as the operator's convention rather than a library-enforced constraint, consistent with the library's posture toward opaque string claims (see KD-07). The library does not validate this field; conformance to the convention is the operator's responsibility.
+
+- **§9.2 (Verification flow):** updated the narrative to describe the verifier as an awaited async call rather than a synchronous one. This anticipates the OI-15 async migration.
+
+- **§10 (API Surface):** `HBD_ContextVerifier.Verify` reference updated to `VerifyAsync` with `Task<BootstrapDocResult>` return type, per OI-15.
+
+- **FR-04:** rewritten to specify the verifier is asynchronous. Cross-reference to OI-15 added for context.
+
+Open Item dispositions:
+
+- **OI-12** (cnf evaluation congruency): resolved by the prior implementation pass. Commit hash to be filled in.
+- **OI-13** (`pkthumb` rename congruency): resolved by the prior implementation pass. Commit hash to be filled in.
+- **OI-14** (signer iat/exp validation congruency): resolved by the prior implementation pass. Commit hash to be filled in.
+- **OI-15** (async migration): planted and resolved. Scoped to implementation in the accompanying directive.
+- **OI-16** (single base64url encoder): planted and resolved. Standardize on `Microsoft.IdentityModel.Tokens.Base64UrlEncoder`.
+- **OI-17** (document signer result codes): planted and resolved. Add XML-doc tables on multi-return-code methods.
+- **OI-18** (async migration congruency): planted, awaiting implementation.
+- **OI-19** (single encoder congruency): planted, awaiting implementation.
+- **OI-20** (result-code documentation congruency): planted, awaiting implementation.
+
+The `[commit: TBD]` placeholders in OI-12/13/14 closures will be replaced with the actual commit hashes of the prior implementation pass in a follow-up edit after this revision is committed.
+
+A separate implementation directive document accompanies this revision and instructs the CLI implementer on the OI-15/16/17 code work. After that pass lands, OI-18/19/20 will close in a subsequent revision.
 
 ### 2026-05-11T04:24:31Z
 
