@@ -20,7 +20,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Model\Host_BootstrapDoc.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Model\JWK_ECDsa.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Model\JWS_Header.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Model\PublicKeyRing.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Model\PublicKeyCache.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Service\HBD_ContextVerifier.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Service\HBD_Signer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Service\VerificationSettings.cs" />
