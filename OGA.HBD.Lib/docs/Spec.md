@@ -5,7 +5,7 @@
 **Author:** [Project owner]
 **Status:** Draft
 **Created:** 2026-05-10T09:05:32Z
-**Last Updated:** 2026-05-11T05:55:38Z
+**Last Updated:** 2026-05-11T06:15:07Z
 **Related Documents:** None at this revision. Future related documents include the `groundcontrol` central authority spec and the host provisioning script spec, both of which will reference this document as a foundation.
 
 ---
@@ -822,15 +822,15 @@ Originally tracked the filename `PublicKeyRing.cs` containing class `PublicKeyCa
 
 ### OI-12 — Congruency check: cnf evaluation matches §6.5 [resolved]
 
-**Resolution.** The cnf evaluation implementation pass landed in `[commit: TBD]` and was verified against §6.5 and FR-17 / FR-18. The verifier's behavior across all branches of cnf evaluation — match, mismatch in Warn, mismatch in Enforce, missing cnf in Warn/Enforce, local-thumbprint-provider exception in Warn, local-thumbprint-provider exception in Enforce — matches the spec. Test coverage exercises each branch. The project owner confirmed test results on a development VM (the implementer did not have the credential infrastructure to run the full test suite directly).
+**Resolution.** The cnf evaluation implementation pass landed in `[commit: 5277af7]` and was verified against §6.5 and FR-17 / FR-18. The verifier's behavior across all branches of cnf evaluation — match, mismatch in Warn, mismatch in Enforce, missing cnf in Warn/Enforce, local-thumbprint-provider exception in Warn, local-thumbprint-provider exception in Enforce — matches the spec. Test coverage exercises each branch. The project owner confirmed test results on a development VM (the implementer did not have the credential infrastructure to run the full test suite directly).
 
 ### OI-13 — Congruency check: `pkthumb` rename is complete [resolved]
 
-**Resolution.** The rename pass landed in `[commit: TBD]`. The wire format uses `pkthumb`; the C# property is `ConfirmationInfo.pkthumb`; helper methods are `ComputePkthumbFromSpkiPem` and `GetLocalPkthumb`; the `ILocalKeyThumbprintProvider` interface method is renamed; the XML doc comment on `ConfirmationInfo.pkthumb` is rewritten per OI-10; the doc comments on `ILocalKeyThumbprintProvider` and `SpkiFileThumbprintProvider` point to the Windows cert-store provider's location per OI-04; test fixtures are updated. No stale `"jkt"` strings remain in production code paths.
+**Resolution.** The rename pass landed in `[commit: 5277af7]`. The wire format uses `pkthumb`; the C# property is `ConfirmationInfo.pkthumb`; helper methods are `ComputePkthumbFromSpkiPem` and `GetLocalPkthumb`; the `ILocalKeyThumbprintProvider` interface method is renamed; the XML doc comment on `ConfirmationInfo.pkthumb` is rewritten per OI-10; the doc comments on `ILocalKeyThumbprintProvider` and `SpkiFileThumbprintProvider` point to the Windows cert-store provider's location per OI-04; test fixtures are updated. No stale `"jkt"` strings remain in production code paths.
 
 ### OI-14 — Congruency check: signer iat/exp validation [resolved]
 
-**Resolution.** The signer-validation pass landed in `[commit: TBD]`. `HBD_Signer.CreateBootstrapJws` rejects HBDs whose `iat` is zero or negative, whose `exp` is zero or negative, or whose `exp` is not strictly greater than `iat`. Tests exercise each rejection path.
+**Resolution.** The signer-validation pass landed in `[commit: 5277af7]`. `HBD_Signer.CreateBootstrapJws` rejects HBDs whose `iat` is zero or negative, whose `exp` is zero or negative, or whose `exp` is not strictly greater than `iat`. Tests exercise each rejection path.
 
 ### OI-15 — Migrate verifier from `JsonWebTokenHandler.ValidateToken` to `ValidateTokenAsync` [resolved: scoped to implementation]
 
@@ -873,34 +873,35 @@ Methods to be documented:
 
 A congruency-check OI (OI-20) is planted to verify the documentation once the work lands.
 
-### OI-18 — Congruency check: async migration is complete [planted, awaiting implementation]
+### OI-18 — Congruency check: async migration is complete [resolved]
 
-After the OI-15 async migration lands, confirm:
-- `HBD_ContextVerifier.VerifyAsync` exists and returns `Task<BootstrapDocResult>`.
-- `HBD_ContextVerifier.Verify` (the sync version) is removed entirely — no wrapper, no `.GetAwaiter().GetResult()` shim.
-- The call site at the former `HBD_ContextVerifier.cs:249` uses `await handler.ValidateTokenAsync(...)`.
-- No `[System.Obsolete]` warnings remain at build time related to `ValidateToken`.
-- All tests are updated to `await` the new method and continue to pass.
-- The README quick-start example uses `await HBD_ContextVerifier.VerifyAsync(...)`.
+**Resolution.** The async migration landed in `[commit: 4a6d2b6]`. `HBD_ContextVerifier.VerifyAsync` exists with return type `Task<BootstrapDocResult>`; the legacy sync `Verify` is removed (no wrapper, no sync-over-async shim). The call site uses `await handler.ValidateTokenAsync(...)`. No CS0618 warnings related to `ValidateToken` remain at build time. Existing tests were updated to `await VerifyAsync` and pass on the project owner's development VM. A reflection-based test (`Test_VerifyAsync_ReturnsTask` in `AsyncVerifierApi_Tests.cs`) asserts the signature and the absence of the sync method, preventing accidental regressions. The README quick-start update is handled by the project owner in a separate commit, per the implementation directive's note.
 
-### OI-19 — Congruency check: single base64url encoder [planted, awaiting implementation]
+### OI-19 — Congruency check: single base64url encoder [resolved]
 
-After the OI-16 standardization lands, confirm:
-- `HBD_Signer.ComputePkthumbFromSpkiPem` uses `Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode`.
-- No references to `Jose.Base64Url.Encode` (or equivalent) for `pkthumb` computation remain anywhere in the library.
-- The jose-jwt dependency is retained for `JWT.Encode` in the signer; it is not removed wholesale. (jose-jwt's role narrows to JWS encoding only.)
-- A regression test, if practical to add, confirms that signer-computed and verifier-computed thumbprints match byte-for-byte over a representative set of EC P-256 keys.
+**Resolution.** The encoder standardization landed in `[commit: 4a6d2b6]`. `HBD_Signer.ComputePkthumbFromSpkiPem` uses `Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode`. The audit found and migrated additional sites that fell under the "or equivalent" qualifier — the hand-rolled `Base64Url` helper in `ES256_Issuer` (used for kid computation, a thumbprint) was removed, and the kid + JWK x/y encoding now also route through `Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode`. The jose-jwt NuGet reference is retained for `JWT.Encode` in the signer; its role narrows to JWS encoding only. A regression test (`Test_SignerAndVerifier_AgreeOnPkthumb` in `EncoderAgreement_Tests.cs`) generates fresh EC P-256 keypairs, computes the thumbprint of each via both the signer's `ComputePkthumbFromSpkiPem` and the verifier's `SpkiFileThumbprintProvider`, and asserts byte-for-byte equality.
 
-### OI-20 — Congruency check: result-code documentation [planted, awaiting implementation]
+### OI-20 — Congruency check: result-code documentation [resolved]
 
-After the OI-17 documentation work lands, confirm:
-- `HBD_Signer.CreateBootstrapJws` carries an XML doc comment that enumerates each return code value and its meaning, with each code documented as `<returns>` content or in a dedicated `<remarks>` table.
-- The implementer's audit identified any other signer-side methods using the same magic-number convention with multiple failure codes; each is documented similarly.
-- IntelliSense in Visual Studio shows the return-code documentation on hover for callers.
+**Resolution.** The result-code documentation work landed in `[commit: 4a6d2b6]`. `HBD_Signer.CreateBootstrapJws` carries an XML doc `<returns>` block enumerating each return-code value (`1`, `-1`, `-2`, `-3`) and its meaning. The implementer's audit identified three additional public signer-side helper methods in `OGA.HBD.Helpers.ES256_Issuer` that use the same multi-return-code convention; each has been documented similarly: `Get_PrivKeyPKCS8_from_ECDsaInstance` (codes `1`, `-1`, `-2`), `CreateIssuer_fromPrivatePKCS8` (codes `1`, `-2`), and `LoadIssuer_fromPrivateKeyPEMPkcs8` (codes `1`, `-1`, where `-1` collapses several underlying failure modes from its delegated calls). Lower-level helpers in `PEMConverter` and the verifier-side `HostInfo_V1.RecoverHostInfo_fromPayload` were considered and deliberately left undocumented for this pass; they fall outside the "signer-side" scope of OI-17 and a future revision may pick them up.
 
 ---
 
 ## 14. Revision Log
+
+### 2026-05-11T06:15:07Z
+
+Bookkeeping revision. The second implementation pass (the OI-15 / OI-16 / OI-17 work) landed in `[commit: 4a6d2b6]` and closes cleanly:
+
+- **OI-18** (async migration congruency): resolved. `VerifyAsync` returns `Task<BootstrapDocResult>`; sync `Verify` is removed; no CS0618 warnings remain.
+- **OI-19** (single base64url encoder congruency): resolved. The audit pulled in the hand-rolled `Base64Url` in `ES256_Issuer` as an "or equivalent" candidate and migrated it too; `Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode` is the single thumbprint encoder. A regression test exercises signer/verifier agreement.
+- **OI-20** (result-code documentation congruency): resolved. `HBD_Signer.CreateBootstrapJws` documents its four return codes; the audit identified three additional signer-side `ES256_Issuer` methods that were documented in the same pass.
+
+The `[commit: TBD]` placeholders in OI-12/13/14 (the congruency checks for the first implementation pass) have been replaced with `[commit: 5277af7]`, the actual landing commit for that pass.
+
+Both implementation directives are archived: `docs/archive/IMPLEMENTATION_DIRECTIVE_2026-05-11.md` (the first pass) and `docs/archive/IMPLEMENTATION_DIRECTIVE_2026-05-11-r2.md` (this pass). Each carries a "Status: Archived" banner at the top.
+
+No new Open Items, FRs, or KDs are added in this revision; only resolutions, commit-hash backfills, and the archival housekeeping.
 
 ### 2026-05-11T05:55:38Z
 
@@ -928,9 +929,7 @@ Open Item dispositions:
 - **OI-19** (single encoder congruency): planted, awaiting implementation.
 - **OI-20** (result-code documentation congruency): planted, awaiting implementation.
 
-The `[commit: TBD]` placeholders in OI-12/13/14 closures will be replaced with the actual commit hashes of the prior implementation pass in a follow-up edit after this revision is committed.
-
-A separate implementation directive document accompanies this revision and instructs the CLI implementer on the OI-15/16/17 code work. After that pass lands, OI-18/19/20 will close in a subsequent revision.
+A separate implementation directive document accompanies this revision and instructs the CLI implementer on the OI-15/16/17 code work. After that pass lands, OI-18/19/20 will close in a subsequent revision. *(That subsequent revision is the 2026-05-11T06:15:07Z entry above; OI-12/13/14 commit hashes were filled in at the same time.)*
 
 ### 2026-05-11T04:24:31Z
 

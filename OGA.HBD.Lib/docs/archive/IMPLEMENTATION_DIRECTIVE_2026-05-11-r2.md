@@ -1,5 +1,7 @@
 # OGA.HBD: Implementation Directive — Spec Alignment Pass 2
 
+> **Status:** Archived. The work described in this directive landed in `[commit: 4a6d2b6]` on 2026-05-11. Congruency checks OI-18/19/20 closed in the SPEC.md revision dated 2026-05-11T06:15:07Z. Subsequent passes are described in their own directives.
+
 **Target Spec:** `SPEC.md`, revision `2026-05-11T05:55:38Z`
 **Repository:** `https://github.com/ogauto/OGA.HBD.Lib`
 **Predecessor:** `IMPLEMENTATION_DIRECTIVE_2026-05-11.md` (already landed; will be archived as part of this pass)
