@@ -44,8 +44,12 @@ namespace OGA.HBD.Model
         public HostInfo_V1 hostInfo { get; set; }
 
         /// <summary>
-        /// Holds the confirmation info for the document signature.
-        /// This contains any JWK thumbprint that authenticates the VM as the instance the HBD belongs to.
+        /// Holds the proof-of-possession confirmation claim for the document.
+        /// When populated, carries the SPKI-SHA256 thumbprint of the Host Binding Key,
+        /// allowing a verifier to confirm that the host presenting this HBD owns the
+        /// matching private key. Null or omitted on HBDs that do not carry a binding;
+        /// required for verification in VerifySignatureAndCnfWarn and EnforceAll modes.
+        /// See ConfirmationInfo for the field shape, and SPEC.md §6.4 / KD-01 for design rationale.
         /// </summary>
         public ConfirmationInfo? cnf { get; set; }
 
