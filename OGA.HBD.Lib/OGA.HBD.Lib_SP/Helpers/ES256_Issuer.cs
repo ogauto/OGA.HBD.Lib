@@ -62,7 +62,9 @@ namespace OGA.HBD.Helpers
             byte[] pkcs8 = ecdsa.ExportPkcs8PrivateKey();
 
             // Create a URL-safe hash of the public key, that will be the key id...
-            var kid = Base64UrlEncoder.Encode(SHA256.HashData(spki));
+            // The kid is an SPKI thumbprint, computed by the same canonical utility that backs
+            // cnf.pkthumb, so the two cannot drift apart. See SPEC.md KD-01.
+            var kid = SpkiThumbprint.Compute(spki);
 
             // Retrieve the public key material...
             var p = ecdsa.ExportParameters(false);

@@ -44,11 +44,12 @@ namespace OGA.HBD.Lib_Tests
 
 
         /// <summary>
-        /// For a representative set of EC P-256 keypairs, confirm that
-        ///   HBD_Signer.ComputePkthumbFromSpkiPem(spkiPemPath)
-        /// and
-        ///   SpkiFileThumbprintProvider(spkiPemPath).GetLocalPkthumb()
-        /// produce byte-identical thumbprints.
+        /// For a representative set of EC P-256 keypairs, confirm that every SPKI-thumbprint code path
+        /// in the library produces byte-identical output for the same key. This locks the
+        /// single-source-of-truth invariant: the canonical <see cref="SpkiThumbprint"/> utility, the
+        /// signer-side <c>HBD_Signer.ComputePkthumbFromSpkiPem</c>, the verifier-side
+        /// <c>SpkiFileThumbprintProvider.GetLocalPkthumb</c>, and the issuer <c>kid</c> from
+        /// <c>ES256_Issuer.Get_IssuerProperties</c> must all agree.
         /// </summary>
         [TestMethod]
         public void Test_SignerAndVerifier_AgreeOnPkthumb()
@@ -63,9 +64,14 @@ namespace OGA.HBD.Lib_Tests
                 byte[] spki = ecdsa.ExportSubjectPublicKeyInfo();
                 string pem = PEMConverter.CreatePem("PUBLIC KEY", spki);
 
-                // Write the PEM to a temp file so both code paths read it identically...
+                // Write the PEM to a temp file so the file-based code paths read it identically...
                 string tempPath = Path.Combine(this._testfolder, $"spki-{Guid.NewGuid()}.pem");
                 File.WriteAllText(tempPath, pem);
+
+                // Canonical utility — the single source of truth, exercised via each overload...
+                string canonicalBytes = SpkiThumbprint.Compute(spki);
+                string canonicalKey   = SpkiThumbprint.ComputeFromPublicKey(ecdsa);
+                string canonicalPem   = SpkiThumbprint.ComputeFromPem(pem);
 
                 // Signer-side computation...
                 string signerSide = HBD_Signer.ComputePkthumbFromSpkiPem(tempPath);
@@ -74,12 +80,31 @@ namespace OGA.HBD.Lib_Tests
                 var provider = new SpkiFileThumbprintProvider(tempPath);
                 string verifierSide = provider.GetLocalPkthumb();
 
-                if(string.IsNullOrWhiteSpace(signerSide))
-                    Assert.Fail($"Signer-side thumbprint was blank for sample {i}.");
-                if(string.IsNullOrWhiteSpace(verifierSide))
-                    Assert.Fail($"Verifier-side thumbprint was blank for sample {i}.");
-                if(!string.Equals(signerSide, verifierSide, StringComparison.Ordinal))
-                    Assert.Fail($"Encoder disagreement on sample {i}: signer='{signerSide}', verifier='{verifierSide}'.");
+                // Issuer kid — also an SPKI thumbprint, must share the same formula...
+                string issuerKid = ES256_Issuer.Get_IssuerProperties(ecdsa).Kid;
+
+                // The canonical value is the reference all other paths must match...
+                string expected = canonicalBytes;
+
+                if(string.IsNullOrWhiteSpace(expected))
+                    Assert.Fail($"Canonical thumbprint was blank for sample {i}.");
+
+                var paths = new (string name, string value)[]
+                {
+                    ("SpkiThumbprint.ComputeFromPublicKey", canonicalKey),
+                    ("SpkiThumbprint.ComputeFromPem",       canonicalPem),
+                    ("HBD_Signer.ComputePkthumbFromSpkiPem", signerSide),
+                    ("SpkiFileThumbprintProvider.GetLocalPkthumb", verifierSide),
+                    ("ES256_Issuer.kid", issuerKid),
+                };
+
+                foreach(var (name, value) in paths)
+                {
+                    if(string.IsNullOrWhiteSpace(value))
+                        Assert.Fail($"Thumbprint from {name} was blank for sample {i}.");
+                    if(!string.Equals(expected, value, StringComparison.Ordinal))
+                        Assert.Fail($"Thumbprint disagreement on sample {i}: canonical='{expected}', {name}='{value}'.");
+                }
             }
         }
     }

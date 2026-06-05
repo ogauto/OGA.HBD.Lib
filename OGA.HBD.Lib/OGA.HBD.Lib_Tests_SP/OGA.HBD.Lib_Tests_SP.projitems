@@ -20,5 +20,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\Test_TestBase.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)PEMConverter_Tests.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SignerValidation_Tests.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)VersionGate_Tests.cs" />
   </ItemGroup>
 </Project>

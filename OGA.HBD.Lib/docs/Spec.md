@@ -3,7 +3,7 @@
 **Project:** OGA.HBD
 **Short description:** A signed identity document and supporting library used by hosts and a central authority to attest host identity and bootstrap host management.
 **Status:** Draft
-**Revision:** 4
+**Revision:** 5
 **Template Revision:** 2
 **Created:** 2026-05-10T09:05:32Z
 **Related Documents:** None at this revision. Future related documents include the `groundcontrol` central authority spec and the host provisioning script spec, both of which will reference this document as a foundation.
@@ -141,7 +141,7 @@ The conventions are not duplicated here. The template is the single source of tr
 
 **FR-10 — Document type check.** The verifier shall confirm the HBD's `docType` claim is exactly `"hbd"` (case-sensitive) and reject documents with any other docType.
 
-**FR-11 — Version compatibility.** The verifier shall accept HBDs declaring `version` exactly 1 and reject all other versions. Forward compatibility with future versions is not silent; future versions require a library update.
+**FR-11 — Version compatibility.** The verifier shall accept HBDs whose `version` falls within a supported-version range, expressed as named constants `MinSupportedVersion` and `MaxSupportedVersion` (inclusive), and shall reject any version outside that range. At this revision `MinSupportedVersion = MaxSupportedVersion = 1`, so only `version` 1 is accepted; effective behavior is identical to a strict v1-only gate. The range is fixed at compile time, not runtime-configurable, so the strict posture cannot be weakened by configuration. Forward compatibility with future versions is not silent; a future version is enabled only by a library update that adds that version's handling and raises `MaxSupportedVersion`. See KD-09.
 
 **FR-12 — Algorithm pinning.** The verifier shall accept signatures only when `alg` in the JWS header is `ES256`. Any other algorithm value, including `none`, shall cause verification to fail.
 
@@ -151,7 +151,9 @@ The conventions are not duplicated here. The template is the single source of tr
 
 **FR-14 — Bind to host key.** The library shall support populating the HBD's `cnf` claim with a `pkthumb` value carrying the SPKI thumbprint of a Host Binding Key, in the form defined in §6.4.
 
-**FR-15 — Compute SPKI thumbprint from PEM.** The library shall provide a utility function that takes a path to a PEM-encoded SPKI public key file and returns its base64url(SHA-256(SPKI)) thumbprint, suitable for use as a `cnf.pkthumb` value.
+**FR-15 — Compute SPKI thumbprint from PEM.** The library shall provide a utility function that takes a path to a PEM-encoded SPKI public key file and returns its base64url(SHA-256(SPKI)) thumbprint, suitable for use as a `cnf.pkthumb` value. This file-path utility is a convenience wrapper over the canonical thumbprint utility required by FR-22.
+
+**FR-22 — Canonical SPKI thumbprint utility.** The library shall provide a public, stateless, platform-neutral utility that computes the canonical SPKI thumbprint `base64url(SHA-256(SPKI_DER))` from SPKI bytes already held in memory, and shall also accept an in-memory public-key object (extracting its SubjectPublicKeyInfo internally) and a PEM string. This utility shall be the single implementation of the thumbprint formula: every other place the library computes an SPKI thumbprint — the issuer `kid` (FR-20), the issuer-side `cnf.pkthumb` helper (FR-15), and the verifier's local-thumbprint provider (FR-16) — shall funnel through it, so the formula cannot drift between callers. The utility shall introduce no platform-specific dependency (no certificate store, no mandatory file access); it shall operate purely on SPKI bytes or public-key material. A remote verifier that must recompute a binding thumbprint from a key received over the wire (proof-of-possession verification) is an intended consumer of the public-key overload.
 
 **FR-16 — Pluggable thumbprint provider.** The library shall define an interface, ILocalKeyThumbprintProvider, that returns the thumbprint of a host's binding key, and the verifier shall use this interface to obtain the local thumbprint for cnf checking. The library shall provide a default implementation that reads an SPKI/PEM file from a configured path.
 
@@ -283,7 +285,7 @@ The `docs/` directory does not currently exist in the repository. Adding it as t
 ### 4.5 Non-Requirements (Explicit Exclusions)
 
 - **No support for non-ES256 algorithms.** Algorithm agility is a security liability the library will not adopt. (See KD-02.)
-- **No support for HBD versions other than 1.** When v2 is needed, the library will be revised to handle it explicitly. Mixed-version verification is a v2-onward concern. (See KD-09.)
+- **No support for HBD versions outside the supported range.** Only `version` 1 exists at this revision, so only v1 is accepted. The verifier gates on a supported-version range (today `Min = Max = 1`); a future version is added by a library update that raises the maximum and supplies that version's handling. Mixed-version verification is a v2-onward concern handled by coordinated rollout, not by silent tolerance. (See KD-09.)
 - **No revocation mechanism.** v1 mitigates compromised HBDs through short lifetimes only. (See KD-10.)
 - **No issuer key distribution.** Verifiers obtain trusted public keys via a caller-supplied callback; the library is silent on how that callback is implemented.
 - **No JWKS endpoint client.** The library produces JWKS JSON (`ExportJwks`) but does not host or fetch one.
@@ -304,7 +306,7 @@ The library has no tiers in the conventional sense — it is a single-process, i
 
 **Verifier side.** `HBD_ContextVerifier` provides the verify-and-parse primitive. `VerificationSettings` carries the configuration for a verification call: mode, allowed issuers, key retrieval callback, optional thumbprint provider, lifetime validation flag, clock skew. `ILocalKeyThumbprintProvider` is the interface for cnf binding's local-side computation, with `SpkiFileThumbprintProvider` as the default implementation reading from a PEM file. `PublicKeyCache` is an optional in-memory cache helper for verifiers that want to pool known issuer public keys (not used by the verifier directly; offered to callers).
 
-**Helpers.** `PEMConverter` handles PEM↔DER conversions for keys. `JsonDocument_Helpers` provides safe accessors for reading typed values from a `JsonDocument`.
+**Helpers.** `PEMConverter` handles PEM↔DER conversions for keys. `JsonDocument_Helpers` provides safe accessors for reading typed values from a `JsonDocument`. `SpkiThumbprint` is the canonical, platform-neutral SPKI-thumbprint utility (FR-22) that every thumbprint computation in the library funnels through (issuer `kid`, issuer-side `cnf.pkthumb` helper, and the verifier's local-thumbprint provider), so the formula has exactly one implementation.
 
 The library has no startup path of its own; consumers construct settings, call functions, and consume results.
 
@@ -347,7 +349,7 @@ An HBD is a JWS in compact serialization, of the form `<header>.<payload>.<signa
 | Claim | Type | Required | Value / Notes |
 |------|------|----------|---------------|
 | `docType` | string | Required | Always `"hbd"` (case-sensitive) |
-| `version` | int | Required | Currently `1` only |
+| `version` | int | Required | Within the verifier's supported range; `1` only at this revision (see §8.2, KD-09) |
 | `iss` | string | Required | Issuer URN (see §6.7) |
 | `iat` | int (Unix seconds) | Required | Issued-at time |
 | `exp` | int (Unix seconds) | Required | Expiry time |
@@ -377,7 +379,7 @@ The `gcBaseUrl` field is required by the recovery function (`HostInfo_V1.Recover
 
 **`clusterId`.** A stable per-cluster identifier in the same shape as `instanceId`. Issued by the controlling authority at cluster creation.
 
-**Issuer kid.** The SPKI thumbprint of the issuer's public key, formed as `base64url(SHA-256(spki_der_bytes))`. This means kids are derived deterministically from keys, not assigned out-of-band. A consequence: two issuers with the same key would have the same kid (degenerate case); two distinct keys cannot share a kid by construction. Key rotation is "publish a new public key with its derived kid; the old kid continues identifying the old key for as long as old HBDs need verifying."
+**Issuer kid.** The SPKI thumbprint of the issuer's public key, formed as `base64url(SHA-256(spki_der_bytes))` — computed by the same canonical thumbprint utility that produces `cnf.pkthumb` (FR-22, §6.4), so the two cannot diverge. This means kids are derived deterministically from keys, not assigned out-of-band. A consequence: two issuers with the same key would have the same kid (degenerate case); two distinct keys cannot share a kid by construction. Key rotation is "publish a new public key with its derived kid; the old kid continues identifying the old key for as long as old HBDs need verifying."
 
 **`cnf.pkthumb`.** The SPKI thumbprint of the host binding key, in the same form. See KD-01 for why this is SPKI-based rather than RFC 7638-based and what this means for the field name.
 
@@ -392,6 +394,8 @@ The `cnf` claim follows the shape introduced by RFC 7800 (Proof-of-Possession Ke
 ```
 
 The value of `pkthumb` is the SPKI thumbprint of the binding key's public half: `base64url(SHA-256(spki_der_bytes))`. This is a deliberate departure from the more standards-conformant choice of using `jkt` with an RFC 7638 JWK thumbprint; see KD-01 for the rationale. The field is named `pkthumb` (rather than reusing `jkt`) precisely to avoid implying RFC 7638 semantics that this library does not provide.
+
+This is the canonical binding-thumbprint computation. The library exposes it as a single public, platform-neutral utility (per FR-22) that computes `base64url(SHA-256(SPKI_DER))` from SPKI bytes, an in-memory public key, or a PEM string. The same utility computes the issuer `kid` (§6.3) and is the function a remote verifier calls to recompute a host's binding thumbprint from a key presented during proof-of-possession verification. Because issuer, host verifier, and any remote verifier share one implementation, the binding formula cannot drift between them (e.g., a DER-encoding or base64url-padding difference), which would otherwise silently break binding verification.
 
 When `cnf` is null or absent, the HBD has no proof-of-possession binding. The verifier rejects such HBDs in modes that require a cnf check (see FR-19).
 
@@ -513,9 +517,9 @@ Caller-supplied function the verifier invokes to obtain a public key by kid. Ret
 
 The library's external contract is the HBD format itself, described in §6.2 (header), §6.2 (payload), §6.4 (cnf), §6.7 (issuer URN). Any system that produces or consumes HBDs — this library, a future Go or Rust port, a hand-written verifier — is held to that format.
 
-**Versioning of the contract.** The HBD `version` claim is the signal for breaking changes to the document format. v1 is the only version defined at this revision. A v2 will be introduced when a breaking change is unavoidable; the policy for parallel-version operation during v1→v2 transitions is captured as a future concern in KD-09.
+**Versioning of the contract.** The HBD `version` claim is the signal for breaking changes to the document format. v1 is the only version defined at this revision. The verifier gates acceptance on a supported-version range (`MinSupportedVersion`..`MaxSupportedVersion`, inclusive; today both are 1), rather than a hard equality check, so that introducing a v2 is a matter of adding that version's handling and raising the maximum — not reworking the gate. A v2 will be introduced when a breaking change is unavoidable; the policy for parallel-version operation during v1→v2 transitions is captured in KD-09.
 
-**Versioning of the library.** The library follows semantic versioning. A library version that supports HBD v2 will explicitly state that support; a library version that supports only HBD v1 will reject v2 documents (per FR-11).
+**Versioning of the library.** The library follows semantic versioning. A library version that supports HBD v2 will explicitly state that support (by raising `MaxSupportedVersion` and supplying v2 handling); a library version that supports only HBD v1 will reject v2 documents (per FR-11).
 
 ### 8.3 DTOs and Wire Types
 
@@ -559,9 +563,11 @@ This is a library distributed as a NuGet package; its surface is the public API 
 For reference, the principal public entry points consumers call directly are:
 
 - `HBD_Signer.CreateBootstrapJws(payload, issuerPrivateKey, kid)` — sign an HBD.
-- `HBD_Signer.ComputePkthumbFromSpkiPem(spkiPemPath)` — utility for issuer-side computation of a `cnf.pkthumb` value. (Currently named `ComputeJktFromSpkiPem`; renamed as part of the rename pass.)
+- `SpkiThumbprint.Compute(spkiDer)` / `ComputeFromPublicKey(publicKey)` / `ComputeFromPem(spkiPem)` — the canonical SPKI-thumbprint utility (FR-22). Single source of truth for `base64url(SHA-256(SPKI))`, backing the issuer `kid`, the issuer-side `cnf.pkthumb` helper, and the verifier's local-thumbprint provider. The `ComputeFromPublicKey` overload is the entry point a remote verifier uses to recompute a binding thumbprint from in-memory key material.
+- `HBD_Signer.ComputePkthumbFromSpkiPem(spkiPemPath)` — convenience for issuer-side computation of a `cnf.pkthumb` value from a PEM file; delegates to `SpkiThumbprint`.
 - `HBD_Signer.ExportJwks(issuerPrivateKey, kid)` — produce JWKS for distribution.
 - `HBD_ContextVerifier.VerifyAsync(jwsCompact, versettings)` — verify an HBD. Returns `Task<BootstrapDocResult>`.
+- `HBD_ContextVerifier.MinSupportedVersion` / `MaxSupportedVersion` — public constants declaring the inclusive HBD `version` range the verifier accepts (both `1` at this revision). Consumers may reference these to reason about the supported range (FR-11, KD-09).
 - `HostInfo_V1.RecoverHostInfo_fromPayload(payload)` — recover strongly-typed claims from a verified payload.
 - `ES256_Issuer.Create_NewIssuer()` — generate a new issuer keypair.
 - `ES256_Issuer.LoadIssuer_fromPrivateKeyPEMPkcs8(pemPath)` — reload an issuer from a stored PEM.
@@ -664,15 +670,15 @@ Targeting only `netstandard2.1`. Simpler still, would reach the broadest audienc
 
 **Consequences.** The build pipeline maintains per-target wrapper csproj files. Adding NET 8/9 is a new wrapper csproj and a build configuration change. Captured as a known follow-up with no immediate trigger.
 
-### KD-09 — HBD version 1 is rigidly enforced; v2 is a coordinated upgrade
+### KD-09 — HBD versions are gated by a supported range; v2 is a coordinated upgrade
 
-**Decision.** The verifier accepts only HBDs declaring `version=1`. Version 2 (when needed) is introduced via a library version that explicitly handles it; verifiers running an older library will reject v2 documents rather than silently downgrading.
+**Decision.** The verifier accepts HBDs whose `version` lies within a supported range, `[MinSupportedVersion, MaxSupportedVersion]` inclusive, and rejects anything outside it. At this revision `Min = Max = 1`, so only v1 is accepted — behavior identical to a strict v1-only gate. The range is expressed as fixed, compile-time constants, not runtime configuration, so the strict posture cannot be loosened operationally. A future version is introduced via a library version that adds that version's handling and raises `MaxSupportedVersion`; verifiers running an older library reject the newer version rather than silently downgrading. This range-gate is a structural choice made pre-live: it costs nothing today (Min == Max) but means a version bump never requires reworking the gate or a flag-day cutover.
 
-**Rationale.** Silent version downgrade is a footgun. Forcing a version mismatch to fail loudly catches deployment errors immediately. v1→v2 transitions are coordinated upgrades: groundcontrol begins minting v2 only when all relevant verifiers have been updated to a library version that supports it.
+**Rationale.** Silent version downgrade is a footgun. Forcing a version mismatch to fail loudly catches deployment errors immediately. The reject-what-you-don't-fully-understand posture is correct for a security document: refusing an unrecognized version is safer than processing it partially. The range form is matched to the actual topology rather than to general distributed-systems advice. The consuming protocol (GCS) is the sole issuer and the sole remote verifier, and hosts auto-update and renew, so any version bump is a fully coordinated rollout: teach the verifier to accept `v1 + vN`, deploy the updated verifiers first, then begin minting `vN`, and hosts renew into it. The range gate is the only machinery that rollout needs — no version negotiation, no extensibility framework, no unknown-claim tolerance.
 
-**Alternatives considered.** Version-tolerant parsing that accepts any version it understands and ignores fields it doesn't. Standard advice for many forward-evolving formats but inappropriate here: HBDs are security-critical, and silently ignoring an unrecognized field could mean ignoring a security control introduced in a later version. Rejected.
+**Alternatives considered.** A hard equality check (`version == 1`). Simplest, but every version bump then edits the gate logic itself and risks a flag-day cutover; the range form is the same cost today with a cleaner upgrade path. Rejected. Version-tolerant parsing that accepts any version it understands and ignores fields it doesn't. Standard advice for many forward-evolving formats but inappropriate here: HBDs are security-critical, and silently ignoring an unrecognized field could mean ignoring a security control introduced in a later version. Rejected. Runtime-configurable version bounds. Rejected because configuration is an attack surface on the strict posture; the supported range is a property of the library build, not of a deployment's settings.
 
-**Consequences.** v1→v2 migrations require a planned rollout. The strategy is captured in OI for when it becomes relevant: see future spec revisions.
+**Consequences.** v1→v2 migrations require a planned rollout: raise `MaxSupportedVersion` and ship v2 handling in the library, deploy verifiers, then begin minting v2. The range constants are public so the consuming protocol can reference the verifier's supported range when reasoning about its own version posture. While `Min == Max == 1` there is no observable behavior change from the prior strict gate.
 
 ### KD-10 — No revocation in v1; short HBD lifetimes as the mitigation
 
@@ -850,6 +856,26 @@ A congruency-check OI (OI-20) is planted to verify the documentation once the wo
 
 **Resolution.** The result-code documentation work landed in `[commit: 4a6d2b6]`. `HBD_Signer.CreateBootstrapJws` carries an XML doc `<returns>` block enumerating each return-code value (`1`, `-1`, `-2`, `-3`) and its meaning. The implementer's audit identified three additional public signer-side helper methods in `OGA.HBD.Helpers.ES256_Issuer` that use the same multi-return-code convention; each has been documented similarly: `Get_PrivKeyPKCS8_from_ECDsaInstance` (codes `1`, `-1`, `-2`), `CreateIssuer_fromPrivatePKCS8` (codes `1`, `-2`), and `LoadIssuer_fromPrivateKeyPEMPkcs8` (codes `1`, `-1`, where `-1` collapses several underlying failure modes from its delegated calls). Lower-level helpers in `PEMConverter` and the verifier-side `HostInfo_V1.RecoverHostInfo_fromPayload` were considered and deliberately left undocumented for this pass; they fall outside the "signer-side" scope of OI-17 and a future revision may pick them up.
 
+### OI-21 — Canonical SPKI thumbprint utility [resolved]
+
+Originating from the GCS (groundcontrol) effort as a consumer of this library: the GCS is the sole remote verifier of host identity and, during proof-of-possession verification, must compute `base64url(SHA-256(SPKI_DER))` of a public key it receives over the wire and compare it to an HBD's `cnf.pkthumb`. At the time the request was raised, the formula was duplicated across three private sites (`SpkiFileThumbprintProvider.GetLocalPkthumb`, `HBD_Signer.ComputePkthumbFromSpkiPem`, and the issuer `kid` computation in `ES256_Issuer.Get_IssuerProperties`), with no public way to compute it from in-memory key material. Independent reimplementation by a consumer risks silent drift (DER-encoding or base64url-padding differences) that would break binding verification without an obvious symptom.
+
+**Resolution (FR-22, §6.4, §6.3).** A public, stateless, platform-neutral `OGA.HBD.Helpers.SpkiThumbprint` utility is the single implementation of the formula, exposing `Compute(ReadOnlySpan<byte> spkiDer)`, `ComputeFromPublicKey(AsymmetricAlgorithm publicKey)`, and `ComputeFromPem(string spkiPem)`. All three prior sites were refactored to funnel through it, so the issuer `kid` and `cnf.pkthumb` provably share one formula. The utility takes no platform-specific dependency (no certificate store, no mandatory file access). No wire-format change and no HBD version bump. This adds public API surface, so it is an additive (minor) semantic-version change. A congruency check (OI-23) is planted.
+
+### OI-22 — Version gate widened to a supported range [resolved]
+
+Also originating from the GCS effort, which assumes a range-gate posture for its own protocol-versioning approach. The verifier's `HBDVersion_IsValid` hard-coded `ver == 1`.
+
+**Resolution (FR-11, §8.2, KD-09).** The gate now accepts the inclusive range `[MinSupportedVersion, MaxSupportedVersion]`, exposed as public `const int` on `HBD_ContextVerifier`, both `1` at this revision — so effective behavior is unchanged. The constants are fixed at compile time (not runtime-configurable), preserving the strict reject-what-you-don't-understand posture; no unknown-claim tolerance, version negotiation, or extensibility framework was added. The change is structural pre-live future-proofing: a future version is enabled by raising `MaxSupportedVersion` and adding that version's handling, with the coordinated rollout (verifiers first, then mint the new version) described in KD-09. No wire-format change and no HBD version bump. A congruency check (OI-24) is planted.
+
+### OI-23 — Congruency check: canonical thumbprint utility [resolved]
+
+**Resolution.** `OGA.HBD.Helpers.SpkiThumbprint` exists with the three overloads; `SpkiFileThumbprintProvider.GetLocalPkthumb`, `HBD_Signer.ComputePkthumbFromSpkiPem`, and the `ES256_Issuer` kid computation all delegate to it, leaving no duplicate copy of `base64url(SHA-256(SPKI))` in the library. The agreement test `Test_SignerAndVerifier_AgreeOnPkthumb` (`EncoderAgreement_Tests.cs`) was extended to assert byte-for-byte equality across all five paths (the three `SpkiThumbprint` overloads, the signer helper, the verifier provider, and the issuer `kid`) over fresh EC P-256 keypairs. The solution builds clean across the NET5/6/7 targets and the extended test passes.
+
+### OI-24 — Congruency check: version range gate [resolved]
+
+**Resolution.** `HBD_ContextVerifier` exposes `public const int MinSupportedVersion = 1` and `MaxSupportedVersion = 1`; `HBDVersion_IsValid` is `ver >= MinSupportedVersion && ver <= MaxSupportedVersion`. A new test class `VersionGate_Tests.cs` asserts the constants are public and fixed at 1, and that the gate accepts v1 while rejecting v0 and v2 (the latter two failing specifically with `"Invalid HBD version."`). Effective behavior (only v1 accepted) is unchanged from the prior equality gate.
+
 ---
 
 ## 14. Revision Log
@@ -958,6 +984,31 @@ The `[commit: TBD]` placeholders in OI-12/13/14 (the congruency checks for the f
 Both implementation directives are archived: `docs/archive/IMPLEMENTATION_DIRECTIVE_2026-05-11.md` (the first pass) and `docs/archive/IMPLEMENTATION_DIRECTIVE_2026-05-11-r2.md` (this pass). Each carries a "Status: Archived" banner at the top.
 
 No new Open Items, FRs, or KDs are added in this revision; only resolutions, commit-hash backfills, and the archival housekeeping.
+
+### Revision 5
+
+**Date:** 2026-06-05
+
+Two pre-live, consumer-driven changes requested by the GCS (groundcontrol) effort as the issuer and sole remote verifier of host identity. Neither alters the HBD wire format; neither requires an HBD version bump. Both were specified and implemented in the same pass.
+
+Substantive changes:
+
+- **FR-22 (new):** canonical SPKI-thumbprint utility. Added `OGA.HBD.Helpers.SpkiThumbprint` as the single public, platform-neutral implementation of `base64url(SHA-256(SPKI_DER))`, with overloads for SPKI bytes, an in-memory public key, and a PEM string. The three previously-duplicated copies of the formula (verifier provider, issuer-side `cnf.pkthumb` helper, issuer `kid`) now funnel through it. Motivated by the GCS needing to recompute a binding thumbprint from a key received over the wire during proof-of-possession verification, without reimplementing (and risking drift from) the library formula.
+
+- **FR-11 (revised):** the verifier's version gate changed from a hard `version == 1` equality to an inclusive supported-version range `[MinSupportedVersion, MaxSupportedVersion]`, exposed as public `const int` on `HBD_ContextVerifier` (both `1` at this revision). Effective behavior is unchanged; the change is structural future-proofing for a coordinated v1→vN rollout. The strict reject-unknown posture is retained; no unknown-claim tolerance or version negotiation was added.
+
+- **§6.3, §6.4, §6.5-adjacent, §8.2, KD-09:** updated to describe the canonical thumbprint utility as the single source of truth and the version gate as a supported-range policy with a verifiers-first coordinated-rollout expectation. The payload-schema `version` note and the §4.5 non-requirement were reworded accordingly. §10 (API Surface) lists the new `SpkiThumbprint` entry points and the public version constants.
+
+Semantic-versioning note: FR-22 adds public API surface, so this is an additive **minor** change, not a patch.
+
+Open Item dispositions:
+
+- **OI-21** (canonical thumbprint utility): planted and resolved. Congruency check OI-23 planted and resolved in the same pass.
+- **OI-22** (version range gate): planted and resolved. Congruency check OI-24 planted and resolved in the same pass.
+
+New items: FR-22, OI-21, OI-22, OI-23, OI-24.
+
+The originating work instruction is `docs/WI_HBDLib_ThumbprintUtility_and_VersionRange.md`.
 
 ---
 

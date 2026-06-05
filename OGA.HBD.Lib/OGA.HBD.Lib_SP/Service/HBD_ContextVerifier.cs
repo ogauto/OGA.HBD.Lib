@@ -30,6 +30,26 @@ namespace OGA.HBD.Service
         /// </summary>
         static public string RequiredDocType { get; set; } = "hbd";
 
+        /// <summary>
+        /// Lowest HBD payload version this verifier understands and will accept.
+        /// </summary>
+        /// <remarks>
+        /// The version gate accepts the inclusive range [<see cref="MinSupportedVersion"/>,
+        /// <see cref="MaxSupportedVersion"/>] and loudly rejects anything outside it. Today
+        /// Min == Max == 1 (only v1 exists), so effective behavior is unchanged. A future version
+        /// is introduced by adding its handling and bumping <see cref="MaxSupportedVersion"/>; the
+        /// range gate is the only machinery a coordinated rollout needs. These are fixed compile-time
+        /// constants (not runtime-configurable) so the strict, reject-what-you-don't-understand posture
+        /// cannot be weakened by configuration. See SPEC.md §8.2 and KD-09.
+        /// </remarks>
+        public const int MinSupportedVersion = 1;
+
+        /// <summary>
+        /// Highest HBD payload version this verifier understands and will accept.
+        /// See <see cref="MinSupportedVersion"/> for the range-gate policy.
+        /// </summary>
+        public const int MaxSupportedVersion = 1;
+
 
         #region Public Methods
 
@@ -396,22 +416,19 @@ namespace OGA.HBD.Service
         }
 
         /// <summary>
-        /// Checks that the given HBD version is in range.
+        /// Checks that the given HBD version falls within the supported-version range
+        /// [<see cref="MinSupportedVersion"/>, <see cref="MaxSupportedVersion"/>] inclusive.
+        /// Versions outside the range are rejected, preserving the strict
+        /// reject-what-you-don't-understand posture. See SPEC.md KD-09.
         /// </summary>
         /// <param name="ver"></param>
         /// <returns></returns>
         static private bool HBDVersion_IsValid(int ver)
         {
-            // Lowest we can handle...
-            if(ver < 1)
-                return false;
-
-            // Highest we can handle...
-            if(ver > 1)
-                return false;
-
-            // Must be good.
-            return true;
+            // Reject anything outside the inclusive supported range.
+            // Today Min == Max == 1, so only v1 is accepted; a future version is enabled by
+            // adding its handling and bumping MaxSupportedVersion.
+            return ver >= MinSupportedVersion && ver <= MaxSupportedVersion;
         }
 
         /// <summary>

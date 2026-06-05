@@ -13,6 +13,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\JsonDocument_Helpers.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\PEMConverter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Helpers\SpkiFileThumbprintProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Helpers\SpkiThumbprint.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Model\BootstrapDocResult.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Model\ConfirmationInfo.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Model\Enumerations.cs" />

@@ -53,11 +53,10 @@ namespace OGA.HBD.Helpers
 
         public string GetLocalPkthumb()
         {
-            // Expecting SubjectPublicKeyInfo (SPKI) PEM
+            // Expecting SubjectPublicKeyInfo (SPKI) PEM.
+            // Funnel through the canonical thumbprint utility so the formula is not duplicated.
             var pem = File.ReadAllText(_spkiPemPath);
-            var spki = PEMConverter.ExtractKey_fromPem(pem, "PUBLIC KEY");
-            var hash = SHA256.HashData(spki);
-            return Base64UrlEncoder.Encode(hash);
+            return SpkiThumbprint.ComputeFromPem(pem);
         }
     }
 }
