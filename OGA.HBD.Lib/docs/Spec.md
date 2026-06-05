@@ -2,10 +2,10 @@
 
 **Project:** OGA.HBD
 **Short description:** A signed identity document and supporting library used by hosts and a central authority to attest host identity and bootstrap host management.
-**Author:** [Project owner]
 **Status:** Draft
+**Revision:** 4
+**Template Revision:** 2
 **Created:** 2026-05-10T09:05:32Z
-**Last Updated:** 2026-05-11T06:15:07Z
 **Related Documents:** None at this revision. Future related documents include the `groundcontrol` central authority spec and the host provisioning script spec, both of which will reference this document as a foundation.
 
 ---
@@ -107,44 +107,9 @@ In this spec, "user" refers to a programmatic consumer of the library — typica
 
 ### 1.9 Spec Conventions
 
-This section is identical across all specs produced under this template. It is included verbatim so that any single spec is self-describing.
+This spec adheres to the conventions defined in `SPEC_TEMPLATE.md` at the revision identified by the `Template Revision` field in this spec's title block. See the Conventions section of that document for identifier rules, number stability, requirement language, table usage, revision consistency, intra-log cross-references, and other conventions governing this spec.
 
-**Item identifiers.** Items in this spec are identified by a type prefix and a two-digit zero-padded sequence number:
-
-- **UR-NN** — User Requirement
-- **FR-NN** — Functional Requirement
-- **NFR-NN** — Non-Functional Requirement
-- **KD-NN** — Key Decision
-- **OI-NN** — Open Item
-
-Sequence numbers are assigned in the order items are *created*, not the order they appear in the document. Items may be moved within the document as the spec evolves; their sequence number does not change once assigned.
-
-**Number stability.** Item numbers are stable across all revisions of the spec. A removed item is not deleted from its section — it remains in place with title `### XX-NN — (withdrawn)` and a brief note explaining the removal. New items always take `max(existing_number) + 1` for their type, where the maximum includes all withdrawn entries. Numbers are addresses; addresses are not recycled.
-
-If a project's item count for a given type approaches 99, that is treated as a spec event warranting a major revision and a deliberately widened identifier scheme.
-
-**Cross-references.** Sections are referenced by number (e.g., `§6.5`). Items are referenced by their full identifier (e.g., `FR-14`, `KD-03`).
-
-**Document order is independent of item numbering.** A section may contain `FR-03, FR-15, FR-04, FR-22` in that order because requirements are grouped topically, not by creation order. The identifier is the address; the position is the organization.
-
-**Open Item disposition flags.** Open Items carry one of three dispositions, indicated in the item's title:
-
-- `⚠ NEEDS YOUR INPUT` — requires the project owner to make a decision. The author has no recommendation, or the decision is not theirs to make.
-- `⚠ NEEDS YOUR REVIEW` — the author has a recommendation; the project owner reviews before commit.
-- (no flag) — known gap, intentionally not addressed at this stage of the spec.
-
-**The template is a superset.** This template lists all sections a spec may have. Any individual spec produced from this template is expected to use a subset of these sections. Sections that do not apply to a given project are not deleted — they remain in place with a brief design statement explaining *why* the section was considered and found inapplicable. A bare "not applicable" is insufficient; the explanation is itself a small piece of design reasoning that confirms the consideration happened.
-
-**Tables are for tabular data.** Tables are reserved for information whose presentation genuinely benefits from a tabular rendering — DDL columns, enum values, header/value pairs, dimensional matrices. Requirements, decisions, and open items are prose. Numbered subsections that stand up like a document outline scale better as items grow rationale, get reframed, and accumulate cross-references.
-
-**Requirement language.** Requirements use RFC 2119 vocabulary:
-- **SHALL** / **MUST** — mandatory
-- **SHOULD** — strong recommendation; deviations require justification
-- **MAY** — optional
-
-SHALL is the default and the strong preference for all requirement statements. A well-formed requirement does not hedge — if a behavior is conditional, the condition belongs inside the SHALL: "When X occurs, the system shall Y" rather than "The system should Y." SHOULD and MAY are available if a requirement genuinely cannot be expressed in conditional SHALL form, but the author should attempt the rewrite first.
-
-**Timestamp consistency.** The `Last Updated` field in the title block must match the timestamp of the most recent entry in the Revision Log (§14). Any spec edit that warrants a `Last Updated` change shall also produce a corresponding Revision Log entry. The two values are kept in lockstep.
+The conventions are not duplicated here. The template is the single source of truth for the rules a spec follows; this spec references the template revision it was authored under, and migrations to newer template revisions are deliberate (see `SPEC_RETROFIT_INSTRUCTION.md`).
 
 ---
 
@@ -889,51 +854,26 @@ A congruency-check OI (OI-20) is planted to verify the documentation once the wo
 
 ## 14. Revision Log
 
-### 2026-05-11T06:15:07Z
+### Revision 1
 
-Bookkeeping revision. The second implementation pass (the OI-15 / OI-16 / OI-17 work) landed in `[commit: 4a6d2b6]` and closes cleanly:
+**Date:** 2026-05-10T09:05:32Z
 
-- **OI-18** (async migration congruency): resolved. `VerifyAsync` returns `Task<BootstrapDocResult>`; sync `Verify` is removed; no CS0618 warnings remain.
-- **OI-19** (single base64url encoder congruency): resolved. The audit pulled in the hand-rolled `Base64Url` in `ES256_Issuer` as an "or equivalent" candidate and migrated it too; `Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode` is the single thumbprint encoder. A regression test exercises signer/verifier agreement.
-- **OI-20** (result-code documentation congruency): resolved. `HBD_Signer.CreateBootstrapJws` documents its four return codes; the audit identified three additional signer-side `ES256_Issuer` methods that were documented in the same pass.
+Initial draft. Created retrospectively from the existing OGA.HBD.Lib codebase and the design conversation with Claude that produced this document.
 
-The `[commit: TBD]` placeholders in OI-12/13/14 (the congruency checks for the first implementation pass) have been replaced with `[commit: 5277af7]`, the actual landing commit for that pass.
+Items created:
+- UR-01 through UR-08
+- FR-01 through FR-23
+- NFR-01 through NFR-08
+- KD-01 through KD-11
+- OI-01 through OI-11
 
-Both implementation directives are archived: `docs/archive/IMPLEMENTATION_DIRECTIVE_2026-05-11.md` (the first pass) and `docs/archive/IMPLEMENTATION_DIRECTIVE_2026-05-11-r2.md` (this pass). Each carries a "Status: Archived" banner at the top.
+Notable items: KD-01 (SPKI thumbprint vs RFC 7638) is the most consequential design choice surfaced by the spec exercise; OI-01 (cnf enforcement modes are stubbed) is the most consequential implementation gap; OI-07 (field naming) is the principal cleanup decision needed before further components depend on the library.
 
-No new Open Items, FRs, or KDs are added in this revision; only resolutions, commit-hash backfills, and the archival housekeeping.
+### Revision 2
 
-### 2026-05-11T05:55:38Z
+**Date:** 2026-05-11T04:24:31Z
 
-Third revision. Closes the congruency-check OIs from the previous implementation pass and plants three new resolutions (OI-15, OI-16, OI-17) with their own congruency checks (OI-18, OI-19, OI-20). Adds a small wording correction to §6.2.
-
-Substantive changes:
-
-- **§6.2 (HostInfo schema):** softened the `environment` field description. Previously stated the field shall be "one of `dev`, `test`, `stage`, `val`, `prod` (case-sensitive, lowercase)." Now describes those values as the operator's convention rather than a library-enforced constraint, consistent with the library's posture toward opaque string claims (see KD-07). The library does not validate this field; conformance to the convention is the operator's responsibility.
-
-- **§9.2 (Verification flow):** updated the narrative to describe the verifier as an awaited async call rather than a synchronous one. This anticipates the OI-15 async migration.
-
-- **§10 (API Surface):** `HBD_ContextVerifier.Verify` reference updated to `VerifyAsync` with `Task<BootstrapDocResult>` return type, per OI-15.
-
-- **FR-04:** rewritten to specify the verifier is asynchronous. Cross-reference to OI-15 added for context.
-
-Open Item dispositions:
-
-- **OI-12** (cnf evaluation congruency): resolved by the prior implementation pass. Commit hash to be filled in.
-- **OI-13** (`pkthumb` rename congruency): resolved by the prior implementation pass. Commit hash to be filled in.
-- **OI-14** (signer iat/exp validation congruency): resolved by the prior implementation pass. Commit hash to be filled in.
-- **OI-15** (async migration): planted and resolved. Scoped to implementation in the accompanying directive.
-- **OI-16** (single base64url encoder): planted and resolved. Standardize on `Microsoft.IdentityModel.Tokens.Base64UrlEncoder`.
-- **OI-17** (document signer result codes): planted and resolved. Add XML-doc tables on multi-return-code methods.
-- **OI-18** (async migration congruency): planted, awaiting implementation.
-- **OI-19** (single encoder congruency): planted, awaiting implementation.
-- **OI-20** (result-code documentation congruency): planted, awaiting implementation.
-
-A separate implementation directive document accompanies this revision and instructs the CLI implementer on the OI-15/16/17 code work. After that pass lands, OI-18/19/20 will close in a subsequent revision. *(That subsequent revision is the 2026-05-11T06:15:07Z entry above; OI-12/13/14 commit hashes were filled in at the same time.)*
-
-### 2026-05-11T04:24:31Z
-
-Second revision. Resolved every Open Item carried over from the initial draft except OI-03, which is deliberately deferred to the future groundcontrol spec.
+Resolved every Open Item carried over from the initial draft except OI-03, which is deliberately deferred to the future groundcontrol spec.
 
 Substantive changes:
 
@@ -973,18 +913,51 @@ New items: KD-12, OI-12, OI-13, OI-14.
 
 A separate implementation directive document accompanies this revision and instructs a CLI implementer on the work needed to bring the codebase into alignment with this spec.
 
-### 2026-05-10T09:05:32Z
+### Revision 3
 
-Initial draft. Created retrospectively from the existing OGA.HBD.Lib codebase and the design conversation with Claude that produced this document.
+**Date:** 2026-05-11T05:55:38Z
 
-Items created:
-- UR-01 through UR-08
-- FR-01 through FR-23
-- NFR-01 through NFR-08
-- KD-01 through KD-11
-- OI-01 through OI-11
+Closes the congruency-check OIs from the previous implementation pass and plants three new resolutions (OI-15, OI-16, OI-17) with their own congruency checks (OI-18, OI-19, OI-20). Adds a small wording correction to §6.2.
 
-Notable items: KD-01 (SPKI thumbprint vs RFC 7638) is the most consequential design choice surfaced by the spec exercise; OI-01 (cnf enforcement modes are stubbed) is the most consequential implementation gap; OI-07 (field naming) is the principal cleanup decision needed before further components depend on the library.
+Substantive changes:
+
+- **§6.2 (HostInfo schema):** softened the `environment` field description. Previously stated the field shall be "one of `dev`, `test`, `stage`, `val`, `prod` (case-sensitive, lowercase)." Now describes those values as the operator's convention rather than a library-enforced constraint, consistent with the library's posture toward opaque string claims (see KD-07). The library does not validate this field; conformance to the convention is the operator's responsibility.
+
+- **§9.2 (Verification flow):** updated the narrative to describe the verifier as an awaited async call rather than a synchronous one. This anticipates the OI-15 async migration.
+
+- **§10 (API Surface):** `HBD_ContextVerifier.Verify` reference updated to `VerifyAsync` with `Task<BootstrapDocResult>` return type, per OI-15.
+
+- **FR-04:** rewritten to specify the verifier is asynchronous. Cross-reference to OI-15 added for context.
+
+Open Item dispositions:
+
+- **OI-12** (cnf evaluation congruency): resolved by the prior implementation pass. Commit hash to be filled in.
+- **OI-13** (`pkthumb` rename congruency): resolved by the prior implementation pass. Commit hash to be filled in.
+- **OI-14** (signer iat/exp validation congruency): resolved by the prior implementation pass. Commit hash to be filled in.
+- **OI-15** (async migration): planted and resolved. Scoped to implementation in the accompanying directive.
+- **OI-16** (single base64url encoder): planted and resolved. Standardize on `Microsoft.IdentityModel.Tokens.Base64UrlEncoder`.
+- **OI-17** (document signer result codes): planted and resolved. Add XML-doc tables on multi-return-code methods.
+- **OI-18** (async migration congruency): planted, awaiting implementation.
+- **OI-19** (single encoder congruency): planted, awaiting implementation.
+- **OI-20** (result-code documentation congruency): planted, awaiting implementation.
+
+A separate implementation directive document accompanies this revision and instructs the CLI implementer on the OI-15/16/17 code work. After that pass lands, OI-18/19/20 will close in a subsequent revision. *(That subsequent revision is the 2026-05-11T06:15:07Z entry above; OI-12/13/14 commit hashes were filled in at the same time.)*
+
+### Revision 4
+
+**Date:** 2026-05-11T06:15:07Z
+
+Bookkeeping revision. The second implementation pass (the OI-15 / OI-16 / OI-17 work) landed in `[commit: 4a6d2b6]` and closes cleanly:
+
+- **OI-18** (async migration congruency): resolved. `VerifyAsync` returns `Task<BootstrapDocResult>`; sync `Verify` is removed; no CS0618 warnings remain.
+- **OI-19** (single base64url encoder congruency): resolved. The audit pulled in the hand-rolled `Base64Url` in `ES256_Issuer` as an "or equivalent" candidate and migrated it too; `Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode` is the single thumbprint encoder. A regression test exercises signer/verifier agreement.
+- **OI-20** (result-code documentation congruency): resolved. `HBD_Signer.CreateBootstrapJws` documents its four return codes; the audit identified three additional signer-side `ES256_Issuer` methods that were documented in the same pass.
+
+The `[commit: TBD]` placeholders in OI-12/13/14 (the congruency checks for the first implementation pass) have been replaced with `[commit: 5277af7]`, the actual landing commit for that pass.
+
+Both implementation directives are archived: `docs/archive/IMPLEMENTATION_DIRECTIVE_2026-05-11.md` (the first pass) and `docs/archive/IMPLEMENTATION_DIRECTIVE_2026-05-11-r2.md` (this pass). Each carries a "Status: Archived" banner at the top.
+
+No new Open Items, FRs, or KDs are added in this revision; only resolutions, commit-hash backfills, and the archival housekeeping.
 
 ---
 
