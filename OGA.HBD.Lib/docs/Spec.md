@@ -3,7 +3,7 @@
 **Project:** OGA.HBD
 **Short description:** A signed identity document and supporting library used by hosts and a central authority to attest host identity and bootstrap host management.
 **Status:** Draft
-**Revision:** 5
+**Revision:** 6
 **Template Revision:** 2
 **Created:** 2026-05-10T09:05:32Z
 **Related Documents:** None at this revision. Future related documents include the `groundcontrol` central authority spec and the host provisioning script spec, both of which will reference this document as a foundation.
@@ -97,7 +97,7 @@ In this spec, "user" refers to a programmatic consumer of the library — typica
 
 - **HBD** — Host Bootstrap Document. The signed identity document this library produces and verifies. Defined fully in §6.2.
 - **HBK** — Host Binding Key. The keypair an HBD is bound to via the `cnf.pkthumb` claim. The host owns the private half; the public half's SPKI thumbprint appears in the HBD. Defined fully in §6.6.
-- **groundcontrol** — The planned central authority and controller that issues HBDs and orchestrates host operations. Referenced by name in this spec as an external component but not specified here. The base URL of a host's assigned groundcontrol channel appears in the HBD's `gcBaseUrl` field.
+- **groundcontrol** — The planned central authority and controller that issues HBDs and orchestrates host operations. Referenced by name in this spec as an external component but not specified here. The URL of the groundcontrol service-index discovery document appears in the HBD's `gcServiceIndexUrl` field.
 - **HCS** — Host Control Service. The host-resident agent that uses HBDs to authenticate to groundcontrol. Referenced by name as an external component.
 - **JWS / JWT / JWK / JWKS / JOSE** — Standard IETF terms (RFC 7515, 7519, 7517). Used throughout. See those RFCs for definitions.
 - **SPKI** — SubjectPublicKeyInfo, the DER-encoded structure described by RFC 5280 §4.1.2.7 that wraps a public key with its algorithm identifier. Used in this spec as the canonical binary form from which thumbprints are computed.
@@ -175,7 +175,7 @@ The conventions are not duplicated here. The template is the single source of tr
 
 ### 2.5 Reading Claims
 
-**FR-23 — Recover HostInfo from a verified payload.** The library shall provide a function that takes a verified HBD's JsonDocument payload and produces a strongly-typed HostInfo_V1 instance, returning failure if any required field is missing. (See OI-09 for the consequences of this function's strictness regarding `gcBaseUrl`.)
+**FR-23 — Recover HostInfo from a verified payload.** The library shall provide a function that takes a verified HBD's JsonDocument payload and produces a strongly-typed HostInfo_V1 instance, returning failure if any required field is missing. (See OI-09 for the consequences of this function's strictness regarding `gcServiceIndexUrl`, formerly `gcBaseUrl`.)
 
 ---
 
@@ -369,9 +369,9 @@ An HBD is a JWS in compact serialization, of the form `<header>.<payload>.<signa
 | `clusterId` | string | Required | Identifier of the cluster the host participates in |
 | `clusterName` | string | Required | Human-readable cluster name |
 | `environment` | string | Required | Operator-defined. The convention in this fleet is one of `dev`, `test`, `stage`, `val`, `prod` (lowercase). The library does not validate this field; see KD-07 on the library's general posture toward opaque string claims. |
-| `gcBaseUrl` | string | Required | Base URL of the host's assigned groundcontrol channel |
+| `gcServiceIndexUrl` | string | Required | Absolute URL of the host's assigned groundcontrol service-index discovery document. The host fetches this document to resolve endpoint URLs, supported protocol versions, and JWKS URI(s). See discussion below. |
 
-The `gcBaseUrl` field is required by the recovery function (`HostInfo_V1.RecoverHostInfo_fromPayload`); HBDs lacking it cannot be recovered into a HostInfo_V1 instance. This is consistent with the field's role: the HBD tells the host where its controller is, and an HBD without that information cannot fulfill its role. (See OI-09 for the implication that historic test fixtures predate this field.)
+The `gcServiceIndexUrl` field is required by the recovery function (`HostInfo_V1.RecoverHostInfo_fromPayload`); HBDs lacking it cannot be recovered into a HostInfo_V1 instance. This is consistent with the field's role: the HBD tells the host where to find its controller's service-index discovery document, and an HBD without that information cannot fulfill its role. The field carries the absolute URL of the discovery document itself (service-index style, similar to NuGet's `index.json`), not a base URL the host appends paths to — that is, a verifier receives the URL the host should fetch directly, and the discovery document at that URL is the host's source of truth for every other groundcontrol endpoint, the supported protocol versions, and the JWKS URI(s) for issuer-key distribution. The field is intentionally a single URL because shipping a list of endpoints inline in every HBD would tightly couple the HBD's contents to the groundcontrol service shape and require an HBD reissuance whenever an endpoint URL moves; an indirection through a discovery document keeps the HBD stable across groundcontrol's own evolution. (See OI-09 for the implication that historic test fixtures predate this field; note that OI-09 refers to the field under its earlier name `gcBaseUrl`, renamed at Revision 6.)
 
 ### 6.3 Identifiers
 
@@ -412,8 +412,6 @@ Verification operates in one of four modes, each strictly more demanding than th
 Additional branch behavior for both Warn and Enforce modes: when the local thumbprint provider throws (binding-key material missing, unreadable, malformed), Warn mode SHALL return `Ok=true` with `CnfChecked=true`, `CnfMatched=false`, and `FailureReason` populated with a diagnostic describing the exception so the caller can log it. Enforce mode SHALL return `Ok=false` with `FailureReason` populated with the same diagnostic. (The fact that Warn returns `Ok=true` even when the provider is broken reflects the purpose of Warn mode — surface signals without breaking operation. The diagnostic is the signal; failing on a broken provider would defeat the deployment-rollout use case.)
 
 **EnforceAll (mode 3).** All VerifySignatureAndCnfWarn checks, but cnf mismatch fails verification. Use case: production verification where binding is required for security.
-
-The current implementation supports ParseOnly and VerifySignature. Modes 2 and 3 are designed but stubbed; see OI-01.
 
 ### 6.6 The Host Binding Key
 
@@ -546,7 +544,7 @@ The protocols that *use* HBDs — minting, transport, renewal, host bootstrap �
 
 Two flows touch the library directly. Their full architectural context is sketched here for the implementer's understanding; implementers of consumer systems will see this material expanded in those systems' own specs.
 
-**HBD issuance.** A host needs an HBD. The host (or its provisioning script) presents itself to the issuing authority (groundcontrol, in some role like `bootstrap-ca`). The minting protocol — out of scope for this spec — establishes that the requesting host owns a particular binding-key public half. Once that is established, the issuer constructs a `Host_BootstrapDoc` populated with the host's metadata (region, cluster, tenant, environment, etc.), the issuer's URN as `iss`, current Unix time as `iat`, an `exp` consistent with the issuer's lifetime policy, the `gcBaseUrl` that points the host at its assigned controller channel, and a `cnf.pkthumb` containing the SPKI thumbprint of the host's binding-key public half. The issuer calls `HBD_Signer.CreateBootstrapJws` with the document, the issuer's private key, and the kid. The resulting JWS string is returned to the host (via the minting protocol) where the host stores it according to whatever convention the consumer system has established.
+**HBD issuance.** A host needs an HBD. The host (or its provisioning script) presents itself to the issuing authority (groundcontrol, in some role like `bootstrap-ca`). The minting protocol — out of scope for this spec — establishes that the requesting host owns a particular binding-key public half. Once that is established, the issuer constructs a `Host_BootstrapDoc` populated with the host's metadata (region, cluster, tenant, environment, etc.), the issuer's URN as `iss`, current Unix time as `iat`, an `exp` consistent with the issuer's lifetime policy, the `gcServiceIndexUrl` that points the host at its assigned controller's service-index discovery document, and a `cnf.pkthumb` containing the SPKI thumbprint of the host's binding-key public half. The issuer calls `HBD_Signer.CreateBootstrapJws` with the document, the issuer's private key, and the kid. The resulting JWS string is returned to the host (via the minting protocol) where the host stores it according to whatever convention the consumer system has established.
 
 **HBD verification on a host.** The HCS or HCS bootstrap, on a host, holds an HBD as a JWS string. It needs to confirm the HBD is authentic and (in production) that this host owns the binding key the HBD references. The host constructs a `VerificationSettings` populated with: the appropriate verification mode (typically `EnforceAll` in production, `VerifySignature` in early-deployment / pre-cnf-implementation phases), the set of allowed issuers (the URNs the host trusts to issue its HBDs), a key retrieval callback that resolves issuer kids to public keys (typically against a JWKS file the host received at provisioning, or a caching wrapper around such a file), and an `ILocalKeyThumbprintProvider` configured to read the host's binding-key public PEM. The host awaits `HBD_ContextVerifier.VerifyAsync` with the JWS and the settings. The result tells the host whether the HBD is trustworthy and, in non-bare modes, whether the binding to this host was confirmed.
 
@@ -779,7 +777,7 @@ A congruency-check OI (OI-13) is planted to verify the implementation once the w
 
 ### OI-09 — (withdrawn, resolved by project owner)
 
-Originally tracked the stale test fixture in `Test_TestBase.cs` that did not populate `gcBaseUrl`. The project owner has updated the fixture; the change is pushed to the repository. No implementer action required.
+Originally tracked the stale test fixture in `Test_TestBase.cs` that did not populate `gcBaseUrl`. The project owner has updated the fixture; the change is pushed to the repository. No implementer action required. [Note added at Revision 6: the field referenced here as `gcBaseUrl` was subsequently renamed to `gcServiceIndexUrl`.]
 
 ### OI-10 — Stale comment in `ConfirmationInfo.cs` [resolved: scoped to implementation]
 
@@ -875,6 +873,28 @@ Also originating from the GCS effort, which assumes a range-gate posture for its
 ### OI-24 — Congruency check: version range gate [resolved]
 
 **Resolution.** `HBD_ContextVerifier` exposes `public const int MinSupportedVersion = 1` and `MaxSupportedVersion = 1`; `HBDVersion_IsValid` is `ver >= MinSupportedVersion && ver <= MaxSupportedVersion`. A new test class `VersionGate_Tests.cs` asserts the constants are public and fixed at 1, and that the gate accepts v1 while rejecting v0 and v2 (the latter two failing specifically with `"Invalid HBD version."`). Effective behavior (only v1 accepted) is unchanged from the prior equality gate.
+
+### OI-25 — Rename HostInfo field `gcBaseUrl` → `gcServiceIndexUrl` [resolved: scoped to implementation]
+
+Originating from the GCS (groundcontrol) effort, which has adopted a service-index discovery model (NuGet `index.json` style): a host is pointed at a single discovery-document URL and reads all GCS endpoint URLs, supported protocol versions, and JWKS URI(s) out of that document. The HBD HostInfo field that tells a host where to reach the GCS therefore now carries the URL of the discovery document itself, not a base URL the host appends paths to.
+
+The current field name `gcBaseUrl` is misleading under this model — the URL is no longer a "base." The naming-precision posture this project applies elsewhere (the `jkt` → `pkthumb` rename in KD-01, the `Host Binding Key` choice over `Host Bootstrap Key`) applies here too.
+
+**Resolution.** Rename the HostInfo field from `gcBaseUrl` to `gcServiceIndexUrl` throughout the library: the HBD/HostInfo schema, wherever HostInfo is constructed or serialized at mint, any helper or reader that accesses the field by name, sample-generation, and tests. The semantic clarification — that the value is the absolute URL of the GCS service-index discovery document, which the host fetches to resolve endpoints, supported versions, and JWKS URI(s) — is captured in §6.2's HostInfo schema discussion.
+
+This is a HostInfo schema change, but the project is pre-live — no HBDs have been minted in production, so there is no v1 corpus to break. This is an in-place change to HBD v1; no version bump is required. The wire format change beyond the field name is nil (the value is still a string holding a URL).
+
+A congruency check (OI-26) is planted for verification after the implementation pass lands. The originating work instruction is `docs/WI_HBDLib_HostInfo_gcServiceIndexUrl_Rename.md`.
+
+### OI-26 — Congruency check: `gcServiceIndexUrl` rename is complete [planted, awaiting implementation]
+
+After the OI-25 rename pass lands, confirm:
+- The HostInfo POCO carries `gcServiceIndexUrl` and no longer carries `gcBaseUrl`.
+- The wire format uses `gcServiceIndexUrl` (verified by signing a sample HBD and inspecting the decoded JSON payload).
+- `HostInfo_V1.RecoverHostInfo_fromPayload` reads `gcServiceIndexUrl` and fails recovery when it is absent (preserving the FR-23 strictness).
+- The test fixture `Generate_ValidHostBootstrapDocument` populates the renamed field and comparison helpers exercise it.
+- No `gcBaseUrl` strings remain in `OGA.HBD.Lib_SP/` or `OGA.HBD.Lib_Tests_SP/` except in: (a) historical text in the SPEC.md revision log; (b) the explicit historical clarification in withdrawn OI-09; (c) any comment that documents the rename for future readers.
+- Build clean across all targets; existing tests pass.
 
 ---
 
@@ -1009,6 +1029,35 @@ Open Item dispositions:
 New items: FR-22, OI-21, OI-22, OI-23, OI-24.
 
 The originating work instruction is `docs/WI_HBDLib_ThumbprintUtility_and_VersionRange.md`.
+
+### Revision 6
+
+**Date:** 2026-06-04
+
+Pre-live, consumer-driven schema-name change requested by the GCS (groundcontrol) effort. The HostInfo field `gcBaseUrl` is renamed to `gcServiceIndexUrl` to reflect the GCS's adoption of a service-index discovery model: the field now carries the URL of a discovery document the host fetches, not a base URL it appends paths to. The naming-precision concern is the same one that drove the `jkt` → `pkthumb` rename in earlier work (KD-01) — the field name should accurately describe what the value is, not what an outdated mental model expected it to be.
+
+This revision specifies the rename; the implementation pass closing OI-25 lands separately.
+
+Substantive changes:
+
+- **§1.8 (Glossary):** the `groundcontrol` entry now describes the discovery-document URL semantics; the field name is updated.
+- **§6.2 (HostInfo schema):** the field row is renamed and its description is rewritten to describe the service-index semantics, including why the indirection exists (decoupling HBD contents from groundcontrol's endpoint shape, so endpoint changes don't require HBD reissuance).
+- **§6.2 (paragraph below schema):** updated to use the new field name and to describe the service-index posture.
+- **§9.2 (HBD issuance flow):** updated to use the new field name.
+- **§6.5 (Verification Modes):** removed a stale sentence stating that modes 2 and 3 were "designed but stubbed; see OI-01." OI-01 was resolved in Revision 3 and all four modes have been implemented since. The four-mode contract is fully described above the removed sentence; nothing replaces it.
+- **FR-23:** updated to reference `gcServiceIndexUrl` (with a parenthetical note of the rename for readers of OI-09).
+- **OI-09 (withdrawn):** the historical text is preserved per the methodology's stability rule; a small bracketed note clarifies that the field has since been renamed.
+
+The wire format outside the field name is unchanged. The value is still a string holding an absolute URL. No HBD version bump per KD-09 and the pre-live status — the rationale is recorded in OI-25.
+
+Open Item dispositions:
+
+- **OI-25** (rename HostInfo field): planted and resolved at the spec level. The implementation pass is scoped to a separate work item; the project owner will hand the rename to the CLI implementer.
+- **OI-26** (congruency check for the rename): planted, awaiting implementation.
+
+New items: OI-25, OI-26.
+
+The originating work instruction is `docs/WI_HBDLib_HostInfo_gcServiceIndexUrl_Rename.md`.
 
 ---
 
