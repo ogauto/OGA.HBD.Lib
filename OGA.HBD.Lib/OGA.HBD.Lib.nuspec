@@ -30,6 +30,11 @@
         <dependency id="Microsoft.IdentityModel.Tokens" version="8.13.1" exclude="Build,Analyzers" />
         <dependency id="jose-jwt" version="5.2.0" exclude="Build,Analyzers" />
       </group>
+      <group targetFramework="net8.0">
+        <dependency id="Microsoft.IdentityModel.JsonWebTokens" version="8.13.1" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.IdentityModel.Tokens" version="8.13.1" exclude="Build,Analyzers" />
+        <dependency id="jose-jwt" version="5.2.0" exclude="Build,Analyzers" />
+      </group>
     </dependencies>
   </metadata>
   <files>
@@ -55,5 +60,12 @@
     <file src=".\OGA.HBD.Lib_NET7\bin\DebugWin\net7.0\win\OGA.HBD.Lib.pdb" target="runtimes\win\lib\net7.0" />
     <file src=".\OGA.HBD.Lib_NET7\bin\DebugLinux\net7.0\linux\OGA.HBD.Lib.dll" target="runtimes\linux\lib\net7.0" />
     <file src=".\OGA.HBD.Lib_NET7\bin\DebugLinux\net7.0\linux\OGA.HBD.Lib.pdb" target="runtimes\linux\lib\net7.0" />
+
+    <file src=".\OGA.HBD.Lib_NET8\bin\DebugWin\net8.0\win\OGA.HBD.Lib.dll" target="ref\net8.0" />
+    <file src=".\OGA.HBD.Lib_NET8\bin\DebugWin\net8.0\win\OGA.HBD.Lib.xml" target="ref\net8.0" />
+    <file src=".\OGA.HBD.Lib_NET8\bin\DebugWin\net8.0\win\OGA.HBD.Lib.dll" target="runtimes\win\lib\net8.0" />
+    <file src=".\OGA.HBD.Lib_NET8\bin\DebugWin\net8.0\win\OGA.HBD.Lib.pdb" target="runtimes\win\lib\net8.0" />
+    <file src=".\OGA.HBD.Lib_NET8\bin\DebugLinux\net8.0\linux\OGA.HBD.Lib.dll" target="runtimes\linux\lib\net8.0" />
+    <file src=".\OGA.HBD.Lib_NET8\bin\DebugLinux\net8.0\linux\OGA.HBD.Lib.pdb" target="runtimes\linux\lib\net8.0" />
   </files>
 </package>

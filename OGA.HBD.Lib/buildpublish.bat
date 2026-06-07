@@ -19,6 +19,12 @@ dotnet build "./OGA.HBD.Lib_NET7/OGA.HBD.Lib_NET7.csproj" -c DebugLinux --runtim
 dotnet restore "./OGA.HBD.Lib_NET7/OGA.HBD.Lib_NET7.csproj"
 dotnet build "./OGA.HBD.Lib_NET7/OGA.HBD.Lib_NET7.csproj" -c DebugWin --runtime win --no-self-contained
 
+dotnet restore "./OGA.HBD.Lib_NET8/OGA.HBD.Lib_NET8.csproj"
+dotnet build "./OGA.HBD.Lib_NET8/OGA.HBD.Lib_NET8.csproj" -c DebugLinux --runtime linux --no-self-contained
+
+dotnet restore "./OGA.HBD.Lib_NET8/OGA.HBD.Lib_NET8.csproj"
+dotnet build "./OGA.HBD.Lib_NET8/OGA.HBD.Lib_NET8.csproj" -c DebugWin --runtime win --no-self-contained
+
 REM Create the composite nuget package file from built libraries...
 D:\Programs\nuget\nuget.exe pack ./OGA.HBD.Lib.nuspec -IncludeReferencedProjects -symbols -SymbolPackageFormat snupkg -OutputDirectory ./Publish -Verbosity detailed
 
