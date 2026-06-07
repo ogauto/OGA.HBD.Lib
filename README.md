@@ -79,7 +79,7 @@ For verification mode semantics (ParseOnly / VerifySignature / VerifySignatureAn
 
 The library is cross-platform. It targets:
 
-- .NET 5, .NET 6, .NET 7
+- .NET 5, .NET 6, .NET 7, .NET 8
 - `linux-any` and `win-any` runtimes
 
 The library ships one default `ILocalKeyThumbprintProvider` implementation, `SpkiFileThumbprintProvider`, which reads a PEM-encoded SPKI public key from a configured path. This works for Linux host SSH keys (after SPKI conversion at provisioning time) and for any other case where binding-key material is available as a PEM file.
