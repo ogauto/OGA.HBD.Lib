@@ -68,10 +68,12 @@ namespace OGA.HBD.Model
         public string environment { get; set; }
 
         /// <summary>
-        /// BaseURL for the groundcontrol API.
-        /// Calls to this base URL route include how the host identifies its assigned channel.
+        /// Absolute URL of the host's assigned groundcontrol service-index discovery document.
+        /// The host fetches this document (NuGet index.json style) to resolve groundcontrol endpoint
+        /// URLs, supported protocol versions, and JWKS URI(s). This is the URL the host fetches
+        /// directly, not a base URL it appends paths to. (Renamed from gcBaseUrl at SPEC.md Revision 6.)
         /// </summary>
-        public string gcBaseUrl { get; set; }
+        public string gcServiceIndexUrl { get; set; }
 
 
         /// <summary>
@@ -88,7 +90,7 @@ namespace OGA.HBD.Model
             this.clusterId = string.Empty;
             this.clusterName = string.Empty;
             this.environment = string.Empty;
-            this.gcBaseUrl = string.Empty;
+            this.gcServiceIndexUrl = string.Empty;
         }
 
         /// <summary>
@@ -106,7 +108,7 @@ namespace OGA.HBD.Model
             this.clusterId = hi.clusterId;
             this.clusterName = hi.clusterName;
             this.environment = hi.environment;
-            this.gcBaseUrl = hi.gcBaseUrl;
+            this.gcServiceIndexUrl = hi.gcServiceIndexUrl;
         }
 
 
@@ -169,7 +171,7 @@ namespace OGA.HBD.Model
                 {
                     return (-1, null);
                 }
-                if(!JsonDocument_Helpers.TryGetString(hostinfo, "gcBaseUrl", out var baseurl))
+                if(!JsonDocument_Helpers.TryGetString(hostinfo, "gcServiceIndexUrl", out var serviceindexurl))
                 {
                     return (-1, null);
                 }
@@ -184,7 +186,7 @@ namespace OGA.HBD.Model
                 doc.instanceId = instanceid;
                 doc.region = region;
                 doc.tenant = tenant;
-                doc.gcBaseUrl = baseurl;
+                doc.gcServiceIndexUrl = serviceindexurl;
 
                 return (1, doc);
             }

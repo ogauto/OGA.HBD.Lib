@@ -36,7 +36,7 @@ namespace OGA.HBD.Lib_Tests.Helpers
             hbd.hostInfo.instanceId = "instanceId-" + Guid.NewGuid().ToString().ToLower();
             hbd.hostInfo.region = "region-" + Guid.NewGuid().ToString().ToLower();
             hbd.hostInfo.tenant = "tenant-" + Guid.NewGuid().ToString().ToLower();
-            hbd.hostInfo.gcBaseUrl = "URN-" + Guid.NewGuid().ToString().ToLower();
+            hbd.hostInfo.gcServiceIndexUrl = "URN-" + Guid.NewGuid().ToString().ToLower();
 
             return hbd;
         }
@@ -62,7 +62,7 @@ namespace OGA.HBD.Lib_Tests.Helpers
                 Assert.Fail("Wrong Value");
             if (hbd.environment != docinstance.environment)
                 Assert.Fail("Wrong Value");
-            if (hbd.gcBaseUrl != docinstance.gcBaseUrl)
+            if (hbd.gcServiceIndexUrl != docinstance.gcServiceIndexUrl)
                 Assert.Fail("Wrong Value");
         }
 

@@ -45,7 +45,7 @@ hbd.hostInfo.tenant       = "my-tenant";
 hbd.hostInfo.clusterId    = "...";
 hbd.hostInfo.clusterName  = "vault02-prod";
 hbd.hostInfo.environment  = "prod";
-hbd.hostInfo.gcBaseUrl    = "https://groundcontrol.example.com/v1/channels/abc";
+hbd.hostInfo.gcServiceIndexUrl = "https://groundcontrol.example.com/index.json";
 // ...populate other hostInfo fields...
 
 // Sign it
@@ -69,7 +69,7 @@ var settings = new VerificationSettings {
 var verification = await HBD_ContextVerifier.VerifyAsync(hbdJws, settings);
 if (verification.Ok) {
     var (recRes, hostInfo) = HostInfo_V1.RecoverHostInfo_fromPayload(verification.Payload);
-    // hostInfo.clusterName, hostInfo.environment, hostInfo.gcBaseUrl, etc.
+    // hostInfo.clusterName, hostInfo.environment, hostInfo.gcServiceIndexUrl, etc.
 }
 ```
 

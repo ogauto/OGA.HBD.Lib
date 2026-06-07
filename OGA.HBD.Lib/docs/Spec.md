@@ -3,7 +3,7 @@
 **Project:** OGA.HBD
 **Short description:** A signed identity document and supporting library used by hosts and a central authority to attest host identity and bootstrap host management.
 **Status:** Draft
-**Revision:** 6
+**Revision:** 7
 **Template Revision:** 2
 **Created:** 2026-05-10T09:05:32Z
 **Related Documents:** None at this revision. Future related documents include the `groundcontrol` central authority spec and the host provisioning script spec, both of which will reference this document as a foundation.
@@ -886,7 +886,7 @@ This is a HostInfo schema change, but the project is pre-live — no HBDs have b
 
 A congruency check (OI-26) is planted for verification after the implementation pass lands. The originating work instruction is `docs/WI_HBDLib_HostInfo_gcServiceIndexUrl_Rename.md`.
 
-### OI-26 — Congruency check: `gcServiceIndexUrl` rename is complete [planted, awaiting implementation]
+### OI-26 — Congruency check: `gcServiceIndexUrl` rename is complete [resolved]
 
 After the OI-25 rename pass lands, confirm:
 - The HostInfo POCO carries `gcServiceIndexUrl` and no longer carries `gcBaseUrl`.
@@ -895,6 +895,14 @@ After the OI-25 rename pass lands, confirm:
 - The test fixture `Generate_ValidHostBootstrapDocument` populates the renamed field and comparison helpers exercise it.
 - No `gcBaseUrl` strings remain in `OGA.HBD.Lib_SP/` or `OGA.HBD.Lib_Tests_SP/` except in: (a) historical text in the SPEC.md revision log; (b) the explicit historical clarification in withdrawn OI-09; (c) any comment that documents the rename for future readers.
 - Build clean across all targets; existing tests pass.
+
+**Resolution.** The rename pass landed in `[commit: TBD]`. All checklist items confirmed:
+- `HostInfo_V1` carries `gcServiceIndexUrl` (with its XML-doc comment rewritten to the service-index discovery-document semantics); the property, constructor initializer, and `CopyFrom` no longer reference `gcBaseUrl`.
+- The wire format uses `gcServiceIndexUrl` by construction (KD-11: serialization preserves exact C# property names) and is exercised end-to-end by the round-trip test `Test_1_1_1` (sign → verify → `RecoverHostInfo_fromPayload` → compare on the renamed field).
+- `HostInfo_V1.RecoverHostInfo_fromPayload` reads the `"gcServiceIndexUrl"` JSON key and still returns failure (`-1`) when it is absent, preserving FR-23 strictness.
+- `Generate_ValidHostBootstrapDocument` populates `gcServiceIndexUrl` and `Compare_HostInfoInstances` asserts on it; `HBDSampleGeneration_Tests` sample builders were updated (15 assignments).
+- The only surviving `gcBaseUrl` strings in the source/test trees are the single rename-documenting comment in `HostInfo.cs` (exception (c)); spec revision-log history and withdrawn OI-09 retain it per exceptions (a)/(b). The consumer-facing `README.md` was also updated (outside the OI-26 scope, but kept consistent).
+- Build is clean across the NET5/6/7 targets. Note: 15 pre-existing test failures in `ES256Issuer_LifeCycle_Tests` and `HBDSampleGeneration_Tests` remain — they were red before this pass and are unrelated to the rename; this pass introduced zero new failures and the rename-relevant tests pass. Those pre-existing failures are tracked separately and are out of scope for OI-26.
 
 ---
 
@@ -1056,6 +1064,18 @@ Open Item dispositions:
 - **OI-26** (congruency check for the rename): planted, awaiting implementation.
 
 New items: OI-25, OI-26.
+
+The originating work instruction is `docs/WI_HBDLib_HostInfo_gcServiceIndexUrl_Rename.md`.
+
+### Revision 7
+
+**Date:** 2026-06-07
+
+Bookkeeping revision. The `gcBaseUrl` → `gcServiceIndexUrl` rename implementation pass (the code/test work specified by OI-25 at Revision 6) landed in `[commit: TBD]` and closes cleanly:
+
+- **OI-26** (congruency check for the rename): resolved. `HostInfo_V1` carries `gcServiceIndexUrl`; the reader `RecoverHostInfo_fromPayload` reads the renamed JSON key and preserves FR-23 strictness; the test fixture and sample builders were updated; the round-trip test `Test_1_1_1` confirms the wire format uses the new key. The only `gcBaseUrl` strings remaining in the source/test trees are a single rename-documenting comment (exception (c)) plus spec-history/OI-09 references (exceptions (a)/(b)). `README.md` was updated for consistency. Build clean across NET5/6/7.
+
+No new Open Items, FRs, or KDs are added in this revision. No wire-format change beyond the field name and no HBD version bump (per OI-25 and the pre-live status). The 15 pre-existing test failures in `ES256Issuer_LifeCycle_Tests` and `HBDSampleGeneration_Tests` are unrelated to this work and remain tracked separately.
 
 The originating work instruction is `docs/WI_HBDLib_HostInfo_gcServiceIndexUrl_Rename.md`.
 

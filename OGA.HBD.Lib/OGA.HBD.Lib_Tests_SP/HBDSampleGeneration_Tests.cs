@@ -1941,7 +1941,7 @@ namespace OGA.HBD.Lib_Tests
             hbd.hostInfo.instanceId = "D58F7E43-AEBB-457C-B38F-B0F38A30F5CC";
             hbd.hostInfo.region = "lee-house";
             hbd.hostInfo.tenant = "oga";
-            hbd.hostInfo.gcBaseUrl = "https://oga_groundplane.ogsofttech.com:7443/api/apiv1";
+            hbd.hostInfo.gcServiceIndexUrl = "https://oga_groundplane.ogsofttech.com:7443/api/apiv1";
             return hbd;
         }
         protected Host_BootstrapDoc Generate_HBD_forVault0202()
@@ -1965,7 +1965,7 @@ namespace OGA.HBD.Lib_Tests
             hbd.hostInfo.instanceId = "AA67A89A-724B-475D-B069-BA51694E2037";
             hbd.hostInfo.region = "lee-house";
             hbd.hostInfo.tenant = "oga";
-            hbd.hostInfo.gcBaseUrl = "https://oga_groundplane.ogsofttech.com:7443/api/apiv1";
+            hbd.hostInfo.gcServiceIndexUrl = "https://oga_groundplane.ogsofttech.com:7443/api/apiv1";
             return hbd;
         }
         protected Host_BootstrapDoc Generate_HBD_forVault0203()
@@ -1989,7 +1989,7 @@ namespace OGA.HBD.Lib_Tests
             hbd.hostInfo.instanceId = "BE8E8491-CDBC-4881-8593-9F1888DB737F";
             hbd.hostInfo.region = "lee-house";
             hbd.hostInfo.tenant = "oga";
-            hbd.hostInfo.gcBaseUrl = "https://oga_groundplane.ogsofttech.com:7443/api/apiv1";
+            hbd.hostInfo.gcServiceIndexUrl = "https://oga_groundplane.ogsofttech.com:7443/api/apiv1";
             return hbd;
         }
         protected Host_BootstrapDoc Generate_HBD_forVault0204()
@@ -2013,7 +2013,7 @@ namespace OGA.HBD.Lib_Tests
             hbd.hostInfo.instanceId = "6C13AD72-AE5C-4079-AB92-EAA3070A3008";
             hbd.hostInfo.region = "lee-house";
             hbd.hostInfo.tenant = "oga";
-            hbd.hostInfo.gcBaseUrl = "https://oga_groundplane.ogsofttech.com:7443/api/apiv1";
+            hbd.hostInfo.gcServiceIndexUrl = "https://oga_groundplane.ogsofttech.com:7443/api/apiv1";
             return hbd;
         }
         protected Host_BootstrapDoc Generate_HBD_forVault0205()
@@ -2037,7 +2037,7 @@ namespace OGA.HBD.Lib_Tests
             hbd.hostInfo.instanceId = "9170AD1D-0251-4513-9F9C-66F39D303FB1";
             hbd.hostInfo.region = "lee-house";
             hbd.hostInfo.tenant = "oga";
-            hbd.hostInfo.gcBaseUrl = "https://oga_groundplane.ogsofttech.com:7443/api/apiv1";
+            hbd.hostInfo.gcServiceIndexUrl = "https://oga_groundplane.ogsofttech.com:7443/api/apiv1";
             return hbd;
         }
         protected Host_BootstrapDoc Generate_HBD_forVault0206()
@@ -2061,7 +2061,7 @@ namespace OGA.HBD.Lib_Tests
             hbd.hostInfo.instanceId = "E22D5C4D-2A74-4CF8-8C28-687AA559AF9C";
             hbd.hostInfo.region = "lee-house";
             hbd.hostInfo.tenant = "oga";
-            hbd.hostInfo.gcBaseUrl = "https://oga_groundplane.ogsofttech.com:7443/api/apiv1";
+            hbd.hostInfo.gcServiceIndexUrl = "https://oga_groundplane.ogsofttech.com:7443/api/apiv1";
             return hbd;
         }
         protected Host_BootstrapDoc Generate_HBD_forVault02API()
@@ -2085,7 +2085,7 @@ namespace OGA.HBD.Lib_Tests
             hbd.hostInfo.instanceId = "0E5101F7-B646-4D7C-95C1-99BEE957D003";
             hbd.hostInfo.region = "lee-house";
             hbd.hostInfo.tenant = "oga";
-            hbd.hostInfo.gcBaseUrl = "https://oga_groundplane.ogsofttech.com:7443/api/apiv1";
+            hbd.hostInfo.gcServiceIndexUrl = "https://oga_groundplane.ogsofttech.com:7443/api/apiv1";
             return hbd;
         }
 
@@ -2110,7 +2110,7 @@ namespace OGA.HBD.Lib_Tests
             hbd.hostInfo.instanceId = "2A04B033-A9BA-42EB-8966-E274907CEB29";
             hbd.hostInfo.region = "lee-house";
             hbd.hostInfo.tenant = "oga";
-            hbd.hostInfo.gcBaseUrl = "https://oga_groundplane.ogsofttech.com:7443/api/apiv1";
+            hbd.hostInfo.gcServiceIndexUrl = "https://oga_groundplane.ogsofttech.com:7443/api/apiv1";
             return hbd;
         }
 
@@ -2135,7 +2135,7 @@ namespace OGA.HBD.Lib_Tests
             hbd.hostInfo.instanceId = "A90869C4-88AF-4903-8734-14F5FC5801F1";
             hbd.hostInfo.region = "lee-house";
             hbd.hostInfo.tenant = "oga";
-            hbd.hostInfo.gcBaseUrl = "https://oga_groundplane.ogsofttech.com:7443/api/apiv1";
+            hbd.hostInfo.gcServiceIndexUrl = "https://oga_groundplane.ogsofttech.com:7443/api/apiv1";
             return hbd;
         }
         protected Host_BootstrapDoc Generate_HBD_forBlissDevHost1()
@@ -2159,7 +2159,7 @@ namespace OGA.HBD.Lib_Tests
             hbd.hostInfo.instanceId = "5C7E9D57-290C-4EF2-A34E-7747A6FB9E24";
             hbd.hostInfo.region = "lee-house";
             hbd.hostInfo.tenant = "bliss";
-            hbd.hostInfo.gcBaseUrl = "https://bliss_groundplane.ogsofttech.com:7443/api/apiv1";
+            hbd.hostInfo.gcServiceIndexUrl = "https://bliss_groundplane.ogsofttech.com:7443/api/apiv1";
             return hbd;
         }
         protected Host_BootstrapDoc Generate_HBD_forBlissDevHost2()
@@ -2183,7 +2183,7 @@ namespace OGA.HBD.Lib_Tests
             hbd.hostInfo.instanceId = "2076CC9E-BABE-466A-94D9-103CE6B9E222";
             hbd.hostInfo.region = "lee-house";
             hbd.hostInfo.tenant = "bliss";
-            hbd.hostInfo.gcBaseUrl = "https://bliss_groundplane.ogsofttech.com:7443/api/apiv1";
+            hbd.hostInfo.gcServiceIndexUrl = "https://bliss_groundplane.ogsofttech.com:7443/api/apiv1";
             return hbd;
         }
         protected Host_BootstrapDoc Generate_HBD_forBlissDevHost3()
@@ -2207,7 +2207,7 @@ namespace OGA.HBD.Lib_Tests
             hbd.hostInfo.instanceId = "62D023E4-36F0-4643-8A14-A2B68BA332A3";
             hbd.hostInfo.region = "lee-house";
             hbd.hostInfo.tenant = "bliss";
-            hbd.hostInfo.gcBaseUrl = "https://bliss_groundplane.ogsofttech.com:7443/api/apiv1";
+            hbd.hostInfo.gcServiceIndexUrl = "https://bliss_groundplane.ogsofttech.com:7443/api/apiv1";
             return hbd;
         }
 
@@ -2232,7 +2232,7 @@ namespace OGA.HBD.Lib_Tests
             hbd.hostInfo.instanceId = "C802EDFE-82C8-404F-984F-AEAE6E8E63D7";
             hbd.hostInfo.region = "lee-house";
             hbd.hostInfo.tenant = "oga";
-            hbd.hostInfo.gcBaseUrl = "https://oga_groundplane.ogsofttech.com:7443/api/apiv1";
+            hbd.hostInfo.gcServiceIndexUrl = "https://oga_groundplane.ogsofttech.com:7443/api/apiv1";
             return hbd;
         }
         protected Host_BootstrapDoc Generate_HBD_forAdmin01()
@@ -2256,7 +2256,7 @@ namespace OGA.HBD.Lib_Tests
             hbd.hostInfo.instanceId = "\t7FA934CD-5959-4D2F-8596-2DCFA964FA17";
             hbd.hostInfo.region = "lee-house";
             hbd.hostInfo.tenant = "oga";
-            hbd.hostInfo.gcBaseUrl = "https://phc_groundplane.ogsofttech.com:7443/api/apiv1";
+            hbd.hostInfo.gcServiceIndexUrl = "https://phc_groundplane.ogsofttech.com:7443/api/apiv1";
             return hbd;
         }
         protected Host_BootstrapDoc Generate_HBD_forBackups01()
@@ -2280,7 +2280,7 @@ namespace OGA.HBD.Lib_Tests
             hbd.hostInfo.instanceId = "\tF5EACA98-E88D-487C-9670-A4161321631D";
             hbd.hostInfo.region = "lee-house";
             hbd.hostInfo.tenant = "oga";
-            hbd.hostInfo.gcBaseUrl = "https://phc_groundplane.ogsofttech.com:7443/api/apiv1";
+            hbd.hostInfo.gcServiceIndexUrl = "https://phc_groundplane.ogsofttech.com:7443/api/apiv1";
             return hbd;
         }
 
